@@ -49,25 +49,28 @@ function iniciar() {
   const copo = new THREE.Group();
   cena.add(copo);
 
-  // ---------- medidas do copo (long drink) ----------
-  const H = 1.5, R0 = 0.35, R1 = 0.41, PAREDE = 0.03, BASE = 0.15;
+  // ---------- taça de cristal: pé, haste e bojo em tulipa ----------
+  // parte de dentro do bojo (raio, altura), de baixo para cima: o suco acompanha essa curva
+  const DENTRO = [[0, 1.035], [0.12, 1.045], [0.24, 1.11], [0.333, 1.24], [0.373, 1.45], [0.363, 1.7], [0.333, 1.95]];
+  const BASE = DENTRO[0][1], H = 1.96, RMAX = 0.373;
   const rDentro = (y) => {
-    const k = THREE.MathUtils.clamp((y - BASE) / (H - BASE), 0, 1);
-    return (R0 - PAREDE) + ((R1 - PAREDE) - (R0 - PAREDE)) * k - 0.004;
+    if (y <= DENTRO[0][1]) return 0.001;
+    for (let i = 1; i < DENTRO.length; i++) {
+      const [r1, y1] = DENTRO[i], [r0, y0] = DENTRO[i - 1];
+      if (y <= y1) { const k = (y - y0) / (y1 - y0), kk = k * k * (3 - 2 * k) * 0.35 + k * 0.65; return r0 + (r1 - r0) * kk - 0.003; }
+    }
+    return DENTRO[DENTRO.length - 1][0] - 0.003;
   };
-
-  // ---------- vidro ----------
   const perfil = [
-    [0, 0], [R0 - 0.025, 0], [R0, 0.025], [R1, H - 0.012], [R1 - 0.007, H],
-    [R1 - PAREDE + 0.006, H], [R1 - PAREDE, H - 0.012], [R0 - PAREDE, BASE + 0.03],
-    [R0 - PAREDE - 0.04, BASE], [0, BASE],
+    [0, 0], [0.30, 0], [0.31, 0.012], [0.295, 0.03], [0.07, 0.05], [0.036, 0.12], [0.031, 0.55], [0.033, 0.9],
+    [0.052, 0.97], [0.13, 1.0], [0.262, 1.08], [0.355, 1.23], [0.395, 1.45], [0.385, 1.7], [0.355, 1.955],
+    [0.345, 1.962], [0.334, 1.955], [0.363, 1.7], [0.373, 1.45], [0.333, 1.24], [0.24, 1.11], [0.12, 1.045], [0, 1.035],
   ].map(([x, y]) => new THREE.Vector2(x, y));
   const vidro = new THREE.Mesh(
-    new THREE.LatheGeometry(perfil, 128),
+    new THREE.LatheGeometry(perfil, 160),
     new THREE.MeshPhysicalMaterial({
-      color: "#ffffff", roughness: 0, metalness: 0, transmission: 1, thickness: 0.1, ior: 1.5,
-      clearcoat: 1, clearcoatRoughness: 0, specularIntensity: 0.8, envMapIntensity: 0.95,
-      side: THREE.DoubleSide,
+      color: "#ffffff", roughness: 0, metalness: 0, transmission: 1, thickness: 0.06, ior: 1.6, dispersion: 5,
+      clearcoat: 1, clearcoatRoughness: 0, specularIntensity: 1, envMapIntensity: 1.1, side: THREE.FrontSide,
     }),
   );
   copo.add(vidro);
@@ -100,13 +103,17 @@ function iniciar() {
   const corpo = new THREE.Mesh(new THREE.BufferGeometry(), suco);
   copo.add(corpo);
   function refazerCorpo(nivel) {
-    const g = new THREE.LatheGeometry([new THREE.Vector2(0.0001, BASE), new THREE.Vector2(rDentro(BASE), BASE), new THREE.Vector2(rDentro(nivel), nivel)], SEG);
+    // a lateral do suco acompanha a curva do bojo até o nível
+    const pts = [new THREE.Vector2(0.0001, BASE)];
+    const passos = 14;
+    for (let i = 1; i <= passos; i++) { const y = BASE + (nivel - BASE) * (i / passos); pts.push(new THREE.Vector2(rDentro(y), y)); }
+    const g = new THREE.LatheGeometry(pts, SEG);
     corpo.geometry.dispose();
     corpo.geometry = g;
   }
 
   // superfície com ondas: malha polar lida de uma grade de altura (equação de onda)
-  const N = 56, ESP = (2 * (R1 - PAREDE)) / (N - 1);
+  const N = 56, ESP = (2 * RMAX) / (N - 1);
   let hAtual = new Float32Array(N * N), hAntes = new Float32Array(N * N);
   const ANEIS = 22, RAIOS = 72;
   const capPos = new Float32Array((ANEIS * RAIOS + 1) * 3);
@@ -122,7 +129,7 @@ function iniciar() {
   const tampa = new THREE.Mesh(capGeo, suco);
   copo.add(tampa);
   const alturaEm = (x, z) => {
-    const gx = (x + (R1 - PAREDE)) / ESP, gz = (z + (R1 - PAREDE)) / ESP;
+    const gx = (x + RMAX) / ESP, gz = (z + RMAX) / ESP;
     const ix = Math.min(N - 2, Math.max(0, Math.floor(gx))), iz = Math.min(N - 2, Math.max(0, Math.floor(gz)));
     const fx = gx - ix, fz = gz - iz, a = hAtual;
     return (a[iz * N + ix] * (1 - fx) + a[iz * N + ix + 1] * fx) * (1 - fz) + (a[(iz + 1) * N + ix] * (1 - fx) + a[(iz + 1) * N + ix + 1] * fx) * fz;
@@ -151,15 +158,15 @@ function iniciar() {
       novo[i] = (2 * hAtual[i] - hAntes[i] + c2 * lap) * amort;
     }
     // parede do copo: fora do círculo, a lâmina fica parada
-    const rr = (R1 - PAREDE) * (R1 - PAREDE);
+    const rr = RMAX * RMAX;
     for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
-      const px = -(R1 - PAREDE) + x * ESP, pz = -(R1 - PAREDE) + z * ESP;
+      const px = -RMAX + x * ESP, pz = -RMAX + z * ESP;
       if (px * px + pz * pz > rr) novo[z * N + x] = 0;
     }
     hAntes = hAtual; hAtual = novo;
   }
   const empurrar = (x, z, forca) => {
-    const ix = Math.round((x + (R1 - PAREDE)) / ESP), iz = Math.round((z + (R1 - PAREDE)) / ESP);
+    const ix = Math.round((x + RMAX) / ESP), iz = Math.round((z + RMAX) / ESP);
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
       const xx = ix + dx, zz = iz + dz;
       if (xx > 0 && zz > 0 && xx < N - 1 && zz < N - 1) hAtual[zz * N + xx] -= forca * Math.exp(-(dx * dx + dz * dz) / 2);
@@ -168,7 +175,7 @@ function iniciar() {
 
   // ---------- o fio que cai (queda livre, afina com a velocidade) ----------
   const G = 7.5;                       // gravidade em "câmera lenta" para ficar bonito
-  const TOPO = 3.9, V0 = 0.35, R_FIO = 0.05;
+  const TOPO = 4.6, V0 = 0.35, R_FIO = 0.05;
   const BOCA = new THREE.Vector3(0.05, TOPO, 0.03), VX = -0.02;
   const ANEL = 18, FATIAS = 70;
   const fioPos = new Float32Array(FATIAS * ANEL * 3);
@@ -189,10 +196,10 @@ function iniciar() {
   const tAte = (y) => { const d = BOCA.y - y; return (-V0 + Math.sqrt(V0 * V0 + 2 * G * d)) / G; };
 
   // cada servida: [início, fim, cor, quanto sobe o nível (em altura)]
-  const ALT = H - BASE - 0.15;
+  const ALT = H - BASE - 0.2;
   const servidas = [
-    { de: 0.75, ate: 2.35, cor: corLaranja, sobe: ALT * 1.12 },
-    { de: 2.65, ate: 3.15, cor: corGroselha, sobe: ALT * 0.1 },
+    { de: 0.75, ate: 2.35, cor: corLaranja, sobe: ALT * 1.05 },
+    { de: 2.65, ate: 3.15, cor: corGroselha, sobe: ALT * 0.08 },
   ];
   function desenharFio(agora, superficie) {
     let ativa = null;
@@ -253,7 +260,7 @@ function iniciar() {
       else g.vy -= G * dt;
       g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
       const rr = Math.hypot(g.x, g.z), lim = rDentro(g.y) - g.r;
-      if (rr > lim && g.y < H) { g.x *= lim / rr; g.z *= lim / rr; g.vx = g.vz = 0; g.parede = true; }
+      if (rr > lim && g.y < H && g.y > BASE) { g.x *= lim / rr; g.z *= lim / rr; g.vx = g.vz = 0; g.parede = true; }
       if ((g.y < superficie && g.vy < 0) || g.r < 0.004) { if (g.y < superficie) empurrar(g.x, g.z, 0.0015); vivas.splice(i, 1); }
     }
     for (let i = 0; i < MAX_GOTAS; i++) {
@@ -295,7 +302,7 @@ function iniciar() {
   const RL = 0.16;
   const limao = new THREE.Mesh(new THREE.CylinderGeometry(RL, RL, 0.04, 72), [cascaMat, polpaMat, polpaMat]);
   const ANG_LIMAO = 0.62;
-  const LIMAO_FIM = new THREE.Vector3(Math.cos(ANG_LIMAO) * (R1 - 0.03), H + RL * 0.2, Math.sin(ANG_LIMAO) * (R1 - 0.03));
+  const LIMAO_FIM = new THREE.Vector3(Math.cos(ANG_LIMAO) * 0.335, H + RL * 0.2, Math.sin(ANG_LIMAO) * 0.335);
   limao.rotation.order = "YXZ";
   limao.rotation.y = -ANG_LIMAO;
   limao.rotation.x = Math.PI / 2;
@@ -305,14 +312,14 @@ function iniciar() {
 
   // ---------- canudo ----------
   const canudo = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.02, 0.02, 1.75, 24, 1, true),
+    new THREE.CylinderGeometry(0.017, 0.017, 1.28, 24, 1, true),
     new THREE.MeshPhysicalMaterial({ color: "#151412", roughness: 0.3, clearcoat: 0.9, side: THREE.DoubleSide }),
   );
   canudo.visible = false;
   copo.add(canudo);
-  const PE_CANUDO = new THREE.Vector3(0.13, BASE + 0.02, -0.08);
+  const PE_CANUDO = new THREE.Vector3(0.06, BASE + 0.03, -0.05);
   const molaCanudo = { y: PE_CANUDO.y + 2.2, v: 0, incl: 0, vi: 0 };
-  const INCL_FIM = 0.3;
+  const INCL_FIM = 0.36;
 
   // sombra macia
   const sombra = (() => {
@@ -332,8 +339,8 @@ function iniciar() {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const emPe = w / h < 0.8;
-    camera.position.set(0, 2.25, emPe ? 8.4 : 6.8);
-    camera.lookAt(0, emPe ? 1.12 : 1.04, 0);
+    camera.position.set(0, 2.4, emPe ? 12.2 : 10.2);
+    camera.lookAt(0, emPe ? 1.25 : 1.12, 0);
     camera.updateProjectionMatrix();
   }
   ajustar();
@@ -350,9 +357,10 @@ function iniciar() {
     tempo += dt;
     const t = tempo;
 
-    const monta = suave(entre(t, 0, 0.55));
-    vidro.scale.set(1, Math.max(0.001, monta), 1);
-    sombra.material.opacity = monta;
+    const surge = suave(entre(t, 0, 0.8));
+    copo.position.y = (1 - surge) * 0.35;
+    renderer.toneMappingExposure = 2.6 - 1.6 * surge;   // sai do branco, como foto revelando
+    sombra.material.opacity = surge;
 
     const imp = desenharFio(t, nivel);
     if (imp) {
@@ -393,7 +401,7 @@ function iniciar() {
       canudo.visible = true;
       if (molaCanudo.y > PE_CANUDO.y) { molaCanudo.v -= G * dt; molaCanudo.y = Math.max(PE_CANUDO.y, molaCanudo.y + molaCanudo.v * dt); }
       else { molaCanudo.vi += ((INCL_FIM - molaCanudo.incl) * 60 - molaCanudo.vi * 6) * dt; molaCanudo.incl += molaCanudo.vi * dt; }
-      const L = 1.75, a = molaCanudo.incl;
+      const L = 1.28, a = molaCanudo.incl;
       canudo.rotation.set(0, 0, a);
       canudo.position.set(PE_CANUDO.x - Math.sin(a) * L / 2, molaCanudo.y + Math.cos(a) * L / 2, PE_CANUDO.z);
     }
