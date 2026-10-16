@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>JC Drinks · Monte a carta da sua festa</title>
+  <meta name="description" content="Escolha a data, os drinks e o balcão da sua festa. A JC Drinks recebe tudo pelo WhatsApp e manda o orçamento.">
+  <meta name="theme-color" content="#f1eee8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <div class="pagina">
+    <header class="topo">
+      <span class="marca">JC <em>Drinks</em></span>
+      <a class="topo-link" href="https://www.instagram.com/jc_drinksoficial/" target="_blank" rel="noopener">Instagram</a>
+    </header>
+
+    <section class="capa">
+      <p class="capa-sobre">Bar de drinks para festas · Jacareí, São José dos Campos e região</p>
+      <h1>Monte a carta<br><em>da sua festa.</em></h1>
+      <p class="capa-texto">Escolha a data, os drinks e o balcão. Você manda tudo pelo WhatsApp e a gente responde com o orçamento.</p>
+    </section>
+
+    <!-- I. A festa -->
+    <section class="secao" id="festa" aria-labelledby="t-festa">
+      <header class="secao-cab"><span class="num">I</span><h2 id="t-festa">A festa</h2></header>
+
+      <div class="campo">
+        <span class="rotulo" id="r-tipo">Que festa é?</span>
+        <div class="opcoes" id="tipos" role="radiogroup" aria-labelledby="r-tipo"></div>
+      </div>
+
+      <div class="campo">
+        <span class="rotulo" id="r-data">Data</span>
+        <div class="calendario" id="calendario" aria-labelledby="r-data"></div>
+        <p class="legenda"><span class="leg leg-livre"></span>livre <span class="leg leg-fechado"></span>fechado</p>
+      </div>
+
+      <div class="duas">
+        <label class="campo" for="horario">
+          <span class="rotulo">Começa às</span>
+          <input id="horario" type="time" value="19:00">
+        </label>
+        <label class="campo" for="convidados">
+          <span class="rotulo">Convidados</span>
+          <input id="convidados" type="number" inputmode="numeric" min="10" step="5" placeholder="80">
+        </label>
+      </div>
+
+      <label class="campo" for="cidade">
+        <span class="rotulo">Cidade e bairro</span>
+        <input id="cidade" type="text" autocomplete="address-level2" placeholder="Jacareí, Centro">
+      </label>
+    </section>
+
+    <!-- II. A carta -->
+    <section class="secao" id="carta" aria-labelledby="t-carta">
+      <header class="secao-cab"><span class="num">II</span><h2 id="t-carta">A carta</h2></header>
+      <p class="secao-texto">Escolha os drinks que vão ser servidos. Pode escolher quantos quiser.</p>
+      <ul class="drinks" id="lista-drinks"></ul>
+    </section>
+
+    <!-- III. O balcão -->
+    <section class="secao" id="balcao" aria-labelledby="t-balcao">
+      <header class="secao-cab"><span class="num">III</span><h2 id="t-balcao">O balcão</h2></header>
+      <ul class="balcoes" id="lista-balcoes" role="radiogroup" aria-labelledby="t-balcao"></ul>
+    </section>
+
+    <!-- IV. Você -->
+    <section class="secao" id="voce" aria-labelledby="t-voce">
+      <header class="secao-cab"><span class="num">IV</span><h2 id="t-voce">Você</h2></header>
+      <label class="campo" for="nome">
+        <span class="rotulo">Nome</span>
+        <input id="nome" type="text" autocomplete="name" placeholder="Como podemos te chamar">
+      </label>
+      <label class="campo" for="telefone">
+        <span class="rotulo">WhatsApp</span>
+        <input id="telefone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(12) 99999-9999">
+      </label>
+      <label class="campo" for="obs">
+        <span class="rotulo">Mais alguma coisa? <em>opcional</em></span>
+        <textarea id="obs" rows="3" placeholder="Festa ao ar livre, tema da decoração, horário de montagem…"></textarea>
+      </label>
+    </section>
+
+    <footer class="rodape">
+      <span class="marca">JC <em>Drinks</em></span>
+      <p>WhatsApp (12) 99228-2276 · <a href="https://www.instagram.com/jc_drinksoficial/" target="_blank" rel="noopener">@jc_drinksoficial</a></p>
+    </footer>
+  </div>
+
+  <!-- O pedido, sempre no pé da tela -->
+  <div class="pedido-barra" id="pedido-barra">
+    <div class="pedido-resumo">
+      <strong id="barra-titulo">Seu pedido</strong>
+      <span id="barra-sub">Escolha a data e os drinks</span>
+    </div>
+    <button type="button" class="botao" id="abrir-pedido">Revisar</button>
+  </div>
+
+  <div class="folha" id="folha" hidden>
+    <div class="folha-fundo" data-fechar></div>
+    <div class="folha-caixa" role="dialog" aria-modal="true" aria-labelledby="t-pedido">
+      <div class="folha-cab">
+        <h2 id="t-pedido">Seu pedido</h2>
+        <button type="button" class="fechar" data-fechar aria-label="Fechar">Fechar</button>
+      </div>
+      <dl class="revisao" id="revisao"></dl>
+      <p class="falta" id="falta" hidden></p>
+      <button type="button" class="botao botao-cheio" id="enviar">Enviar pelo WhatsApp</button>
+      <p class="nota">Abre o WhatsApp da JC Drinks com o pedido escrito. A data só fica reservada depois que a gente confirmar.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
