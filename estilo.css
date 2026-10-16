@@ -1,15 +1,16 @@
 /* JC Drinks: a página parece uma carta de drinks impressa. Papel claro, tinta preta, cada drink com a sua cor.
    Sem caixas, sem brilho: linhas finas separando como num cardápio de bar. */
 :root {
-  --papel: #f1eee8;
+  --papel: #f7f5f1;
   --papel-2: #e8e3da;
   --tinta: #1b1a17;
   --tinta-suave: #66605a;
   --linha: #d3ccc0;
   --whats: #1f5a45;
   --erro: #9c2f22;
-  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
-  --texto: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Marcellus", "Optima", Georgia, serif;
+  --texto: "Jost", "Futura", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ouro-escuro: #a07a3e;
   color-scheme: light;
 }
 
@@ -251,3 +252,132 @@ a.botao { display: inline-block; text-align: center; text-decoration: none; padd
 @media (min-width: 640px) {
   .duas-fotos { margin: 0; gap: 10px; }
 }
+
+/* ---------- chamadas (sem pílula) ---------- */
+.chamada {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  width: 100%; max-width: 330px; margin: 0 auto; padding: 18px 22px;
+  border: 1px solid var(--ouro); color: var(--ouro); text-decoration: none;
+  font-size: 12px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase;
+  position: relative; overflow: hidden; transition: color .4s ease;
+}
+.chamada::before { content: ""; position: absolute; inset: 0; background: var(--ouro); transform: scaleX(0); transform-origin: left; transition: transform .5s cubic-bezier(.7,0,.2,1); z-index: 0; }
+.chamada span, .chamada i { position: relative; z-index: 1; }
+.chamada i { display: block; width: 34px; height: 1px; background: currentColor; transition: width .4s ease; }
+.chamada i::after { content: ""; position: absolute; right: 0; top: -3px; width: 7px; height: 7px; border-top: 1px solid currentColor; border-right: 1px solid currentColor; transform: rotate(45deg); }
+.chamada:hover, .chamada:focus-visible { color: var(--noite); }
+.chamada:hover::before, .chamada:focus-visible::before { transform: scaleX(1); }
+.chamada:hover i { width: 46px; }
+.chamada-escura { border-color: var(--tinta); color: var(--tinta); }
+.chamada-escura::before { background: var(--tinta); }
+.chamada-escura:hover, .chamada-escura:focus-visible { color: var(--papel); }
+.link-fino { display: inline-block; margin-top: 16px; color: var(--noite-suave); font-size: 14px; text-decoration: none; border-bottom: 1px solid #4a453d; padding-bottom: 2px; transition: color .3s, border-color .3s; }
+.link-fino:hover { color: var(--noite-texto); border-color: var(--noite-texto); }
+.acoes { display: block; max-width: none; text-align: center; }
+
+/* ---------- capa em tela cheia e entrada ---------- */
+.capa-foto { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; isolation: isolate; }
+.capa-foto::before {
+  content: ""; position: absolute; inset: -4%; z-index: -1;
+  background: url("img/capa.jpg") center 30% / cover no-repeat;
+}
+.capa-foto { background: linear-gradient(180deg, rgba(14,13,11,.5) 0%, rgba(14,13,11,.7) 50%, rgba(14,13,11,.97) 100%); }
+.noite-topo { position: absolute; top: 18px; left: 0; right: 0; padding-inline: max(22px, env(safe-area-inset-left)); max-width: 664px; margin: 0 auto; }
+
+.anima .capa-foto::before { animation: zoom 14s ease-out both; }
+@keyframes zoom { from { transform: scale(1.14); filter: brightness(.6); } to { transform: scale(1); filter: brightness(1); } }
+.anima .entra { opacity: 0; transform: translateY(18px); animation: sobe 1.1s cubic-bezier(.2,.7,.2,1) var(--atraso, 0s) forwards; }
+@keyframes sobe { to { opacity: 1; transform: none; } }
+.anima .entra-logo text { opacity: 0; animation: aparece 1.4s ease .2s forwards; }
+.anima .entra-logo text:nth-of-type(2) { animation-delay: .38s; }
+.anima .entra-logo text:nth-of-type(3) { animation-delay: .7s; letter-spacing: 15px; }
+@keyframes aparece { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: blur(0); } }
+.anima .taca path, .anima .taca circle { stroke-dasharray: 160; stroke-dashoffset: 160; animation: traca 1.6s ease-in-out .6s forwards; }
+@keyframes traca { to { stroke-dashoffset: 0; } }
+
+/* ---------- letreiro dos drinks ---------- */
+.letreiro { overflow: hidden; border-block: 1px solid var(--linha); margin: 44px calc(-1 * max(22px, env(safe-area-inset-left))) 0; padding-block: 18px; }
+.letreiro-faixa { display: flex; gap: 42px; width: max-content; animation: corre 38s linear infinite; }
+.letreiro span { font-family: var(--display); font-style: italic; font-size: 34px; white-space: nowrap; color: var(--tinta); }
+.letreiro span::after { content: "·"; margin-left: 42px; color: var(--tinta-suave); font-style: normal; }
+@keyframes corre { to { transform: translateX(-50%); } }
+
+/* ---------- surgir ao rolar ---------- */
+.anima .revela { opacity: 0; transform: translateY(28px); transition: opacity 1s ease, transform 1s cubic-bezier(.2,.7,.2,1); }
+.anima .revela.visto { opacity: 1; transform: none; }
+.anima .revela-foto img { clip-path: inset(0 0 100% 0); transform: scale(1.06); transition: clip-path 1.3s cubic-bezier(.7,0,.2,1), transform 1.8s cubic-bezier(.2,.7,.2,1); }
+.anima .revela-foto.visto img { clip-path: inset(0 0 0 0); transform: none; }
+.anima .revela-foto img:nth-child(2) { transition-delay: .18s; }
+.carta li, .passos li { transition: background .3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anima .entra, .anima .entra-logo text, .anima .revela { opacity: 1; transform: none; animation: none; filter: none; }
+  .anima .taca path, .anima .taca circle { stroke-dashoffset: 0; animation: none; }
+  .anima .capa-foto::before, .letreiro-faixa { animation: none; }
+  .anima .revela-foto img { clip-path: none; transform: none; }
+}
+
+
+/* ---------- Marcellus não tem itálico: destaque pela cor ---------- */
+.capa h1 em, .agenda-frase em, .marca em, .noite-frase em { font-style: normal; color: var(--ouro-escuro); }
+.num, .passos span { font-style: normal; font-family: var(--texto); font-weight: 300; font-size: 15px; letter-spacing: .1em; }
+.letreiro span { font-style: normal; letter-spacing: .04em; }
+.data-texto { font-style: normal; }
+
+/* ---------- botões sem pílula, também no orçamento ---------- */
+.opcao, .add, .marca-op, .botao, .cal-nav button { border-radius: 2px; }
+.add, .botao { text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 600; }
+.add { padding: 9px 14px; }
+.botao-cheio { letter-spacing: .18em; font-size: 13px; padding: 18px; }
+.dia { border-radius: 2px; }
+
+/* ---------- abertura com o copo 3D ---------- */
+.abertura { position: relative; height: 100svh; min-height: 560px; background: var(--papel); overflow: hidden; }
+.palco { position: absolute; inset: 0; }
+.palco canvas { display: block; width: 100%; height: 100%; }
+.palco-foto { display: none; }
+.sem-3d .palco-foto { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+.abertura-topo {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: space-between;
+  max-width: 664px; margin: 0 auto; padding: 20px max(22px, env(safe-area-inset-right)) 0 max(22px, env(safe-area-inset-left));
+}
+.abertura-texto { position: absolute; z-index: 2; left: 0; right: 0; top: 9svh; text-align: center; pointer-events: none; }
+.abertura .logo { width: min(200px, 54vw); height: auto; display: block; margin: 0 auto; overflow: visible; }
+.abertura-frase { margin: 10px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .32em; text-transform: uppercase; color: var(--tinta-suave); }
+.abertura-pe {
+  position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; text-align: center;
+  padding: 0 max(22px, env(safe-area-inset-right)) calc(34px + env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+}
+.abertura-pe .chamada { background: rgba(247,245,241,.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.abertura-pe .link-fino { color: var(--tinta-suave); border-color: var(--linha); }
+.abertura-pe .link-fino:hover { color: var(--tinta); border-color: var(--tinta); }
+
+/* o logo e os botões só aparecem quando o drink fica pronto */
+.anima .abertura-texto, .anima .abertura-pe, .anima .abertura-topo { opacity: 0; transform: translateY(14px); transition: opacity 1s ease, transform 1s cubic-bezier(.2,.7,.2,1); }
+.anima .abertura-pe { transition-delay: .35s; }
+.anima .abertura-topo { transition-delay: .6s; transform: none; }
+.abertura-pronta .abertura-texto, .abertura-pronta .abertura-pe, .abertura-pronta .abertura-topo { opacity: 1; transform: none; }
+.anima .abertura .logo text { opacity: 0; filter: blur(5px); transition: opacity 1.1s ease, filter 1.1s ease; }
+.abertura-pronta .abertura .logo text { opacity: 1; filter: none; }
+.abertura-pronta .abertura .logo text:nth-of-type(2) { transition-delay: .12s; }
+.abertura-pronta .abertura .logo text:nth-of-type(3) { transition-delay: .3s; }
+.anima .abertura .taca path, .anima .abertura .taca circle { stroke-dasharray: 160; stroke-dashoffset: 160; animation: none; transition: stroke-dashoffset 1.4s ease-in-out .25s; }
+.abertura-pronta .abertura .taca path, .abertura-pronta .abertura .taca circle { stroke-dashoffset: 0; }
+
+/* frase depois da abertura */
+.manifesto { max-width: 620px; margin: 0 auto; padding: 72px max(22px, env(safe-area-inset-right)) 56px max(22px, env(safe-area-inset-left)); text-align: center; border-bottom: 1px solid var(--linha); }
+.manifesto p { margin: 0 auto; font-family: var(--display); font-size: clamp(26px, 7vw, 36px); line-height: 1.25; max-width: 22ch; text-wrap: balance; }
+.manifesto .manifesto-onde { margin-top: 22px; font-family: var(--texto); font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: var(--tinta-suave); }
+
+@media (prefers-reduced-motion: reduce) {
+  .anima .abertura-texto, .anima .abertura-pe, .anima .abertura-topo, .anima .abertura .logo text { opacity: 1; transform: none; filter: none; transition: none; }
+  .anima .abertura .taca path, .anima .abertura .taca circle { stroke-dashoffset: 0; transition: none; }
+}
+
+/* celular pequeno */
+@media (max-width: 380px) { .chamada { letter-spacing: .14em; padding: 16px 18px; gap: 12px; } .chamada i { width: 24px; } }
+.chamada span { white-space: nowrap; }
+.manifesto .manifesto-onde { max-width: none; }
+.carta h3 small { display: block; margin: 4px 0 0; vertical-align: baseline; }
+.abertura .logo { width: min(170px, 46vw); }
+.abertura-texto { top: 7svh; }
