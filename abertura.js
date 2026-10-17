@@ -32,8 +32,8 @@ function iniciar() {
   // começa nítida e, se os quadros demorarem, baixa um pouco até ficar fluido
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   if (!renderer.getContext()) throw new Error("sem WebGL");
-  const celular = Math.min(innerWidth, innerHeight) < 700;
-  let resolucao = Math.min(devicePixelRatio, celular ? 1.5 : 2);
+  // nítido: usa a densidade da tela do aparelho (até 2,5×); só baixa se o aparelho realmente não der conta
+  let resolucao = Math.min(devicePixelRatio, 2.5);
   renderer.setPixelRatio(resolucao);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -221,7 +221,7 @@ function iniciar() {
   let agitacao = 1;
   function ondas(nivel) {
     if (agitacao < 1e-5) return false; // suco parado: não precisa calcular nada
-    const c2 = 0.3, amort = 0.976, novo = hAntes;
+    const c2 = 0.3, amort = 0.98, novo = hAntes;
     for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) {
       const i = z * N + x;
       const lap = hAtual[i - 1] + hAtual[i + 1] + hAtual[i - N] + hAtual[i + N] - 4 * hAtual[i];
@@ -777,7 +777,8 @@ function iniciar() {
   cena.add(sombra);
 
   // ---------- fundo de festa: preto, com luzes neon passando atrás da taça e refletindo no balcão ----------
-  const neon = [];
+  const neon = [], dancarinos = [];
+  const sorteio = (a, b) => a + Math.random() * (b - a);
   if (FUNDO === "festa") {
     cena.background = new THREE.Color("#050508");
     sombra.visible = false;
@@ -820,7 +821,41 @@ function iniciar() {
     const brilhoChao = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshBasicMaterial({ map: brilhoTex, color: "#ffcf9a", transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
     brilhoChao.rotation.x = -Math.PI / 2; brilhoChao.position.y = -0.006;
     cena.add(brilhoChao);
-    // no escuro, o contorno do cristal e do gelo é claro (reflexo), não escuro
+    // névoa de luz lá atrás: é contra ela que as sombras das pessoas aparecem
+    const nevoa = new THREE.Mesh(new THREE.PlaneGeometry(22, 7), new THREE.MeshBasicMaterial({ map: brilhoTex, color: "#3a2a5a", transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+    nevoa.position.set(0, 1.6, -9.5);
+    cena.add(nevoa);
+    // sombras de pessoas dançando no fundo (só a silhueta, em contraluz), no ritmo da música
+    const sombraMat = new THREE.MeshBasicMaterial({ color: "#040308", transparent: true, opacity: 0.88 });
+    const capsula = (r, l) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 4, 10), sombraMat);
+    for (let i = 0; i < 11; i++) {
+      const p = new THREE.Group(), alt = sorteio(1.05, 1.4);
+      const tronco = capsula(0.17, 0.5); tronco.position.y = 1.2;
+      const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), sombraMat); cabeca.position.y = 1.72;
+      const bracoE = new THREE.Group(), bracoD = new THREE.Group();
+      for (const [b, lado] of [[bracoE, -1], [bracoD, 1]]) { const m = capsula(0.055, 0.55); m.position.y = -0.3; b.add(m); b.position.set(0.2 * lado, 1.48, 0); p.add(b); }
+      const pernaE = capsula(0.075, 0.7), pernaD = capsula(0.075, 0.7);
+      pernaE.position.set(-0.1, 0.45, 0); pernaD.position.set(0.1, 0.45, 0);
+      p.add(tronco, cabeca, pernaE, pernaD);
+      p.scale.setScalar(alt);
+      // atrás do balcão: aparecem só do peito para cima, como a pista lá no fundo
+      p.position.set(-7.5 + i * 1.5 + sorteio(-0.35, 0.35), -1.05 - sorteio(0, 0.25), -7 - sorteio(0, 1.8));
+      p.rotation.y = sorteio(-0.5, 0.5);
+      cena.add(p);
+      dancarinos.push({ p, tronco, cabeca, bracoE, bracoD, fase: sorteio(0, 1), jeito: Math.floor(sorteio(0, 3)), baseY: p.position.y });
+    }
+  }
+  function dancar(batida) {
+    // batida: tempo em "batidas" da música (cresce 1 por batida); cada pessoa mexe de um jeito
+    for (const d of dancarinos) {
+      const b = batida + d.fase, pulo = Math.abs(Math.sin(b * Math.PI));
+      d.p.position.y = d.baseY + pulo * 0.07;
+      d.p.rotation.z = Math.sin(b * Math.PI * 0.5) * 0.08;
+      d.cabeca.position.x = Math.sin(b * Math.PI) * 0.03;
+      if (d.jeito === 0) { d.bracoE.rotation.z = Math.PI - 0.3 + Math.sin(b * Math.PI) * 0.35; d.bracoD.rotation.z = -Math.PI + 0.3 - Math.sin(b * Math.PI) * 0.35; } // mãos para cima
+      else if (d.jeito === 1) { d.bracoE.rotation.z = 0.6 + Math.sin(b * Math.PI) * 0.6; d.bracoD.rotation.z = -0.6 - Math.cos(b * Math.PI) * 0.6; } // braços balançando
+      else { d.bracoE.rotation.z = Math.PI * 0.85; d.bracoD.rotation.z = -0.4 - pulo * 0.5; } // uma mão para cima
+    }
   }
   function mexerNeon(t) {
     const acende = Math.min(1, Math.max(0, (t - 0.3) / 1.5));
@@ -829,6 +864,66 @@ function iniciar() {
       else if (n.tipo === "bolinha") { n.m.position.x = n.x0 + Math.sin(t * n.vel * 0.5 + n.fase) * 1.6; n.m.material.opacity = acende * n.forca * (0.5 + 0.5 * Math.sin(t * n.vel + n.fase)); }
       else { const a = t * n.vel + n.fase; n.m.position.set(Math.cos(a) * 2.6, 1.6 + Math.sin(a * 1.3) * 0.8, Math.sin(a) * 2.2 - 0.6); n.m.intensity = acende * 2.5; }
     }
+  }
+
+  // ---------- música de balada feita em código: bumbo "tuts tuts", chimbal no contratempo e um grave ----------
+  // os navegadores não deixam som tocar sozinho: começa no primeiro toque na página; o botão de som liga e desliga.
+  // Só toca enquanto a abertura está na tela (o volume some quando a pessoa rola para baixo).
+  const BPM = 124;
+  let audio = null, mestre = null, proximaBatida = 0, nBatida = 0, somLigado = false, inicioMusica = 0;
+  const botaoSom = document.getElementById("som");
+  function batida() { return audio && somLigado ? (audio.currentTime - inicioMusica) * BPM / 60 : performance.now() / 1000 * BPM / 60; }
+  function prepararAudio() {
+    if (audio) return;
+    audio = new (window.AudioContext || window.webkitAudioContext)();
+    mestre = audio.createGain(); mestre.gain.value = 0; mestre.connect(audio.destination);
+    const ruido = audio.createBuffer(1, audio.sampleRate * 0.2, audio.sampleRate), dd = ruido.getChannelData(0);
+    for (let i = 0; i < dd.length; i++) dd[i] = Math.random() * 2 - 1;
+    const tocar = (t, n) => {
+      // bumbo
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      o.connect(g).connect(mestre); o.start(t); o.stop(t + 0.34);
+      // chimbal no contratempo
+      const tc = t + 30 / BPM, h = audio.createBufferSource(), hf = audio.createBiquadFilter(), hg = audio.createGain();
+      h.buffer = ruido; hf.type = "highpass"; hf.frequency.value = 7000;
+      hg.gain.setValueAtTime(0.28, tc); hg.gain.exponentialRampToValueAtTime(0.001, tc + 0.06);
+      h.connect(hf).connect(hg).connect(mestre); h.start(tc); h.stop(tc + 0.08);
+      // grave no contratempo (nota muda a cada 4 compassos)
+      const notas = [55, 55, 49, 52], f = notas[Math.floor(n / 16) % 4], b = audio.createOscillator(), bf = audio.createBiquadFilter(), bg = audio.createGain();
+      b.type = "sawtooth"; b.frequency.value = f; bf.type = "lowpass"; bf.frequency.value = 420;
+      bg.gain.setValueAtTime(0.0001, tc); bg.gain.exponentialRampToValueAtTime(0.22, tc + 0.02); bg.gain.exponentialRampToValueAtTime(0.001, tc + 0.22);
+      b.connect(bf).connect(bg).connect(mestre); b.start(tc); b.stop(tc + 0.25);
+      // palma a cada 2 batidas
+      if (n % 2 === 1) {
+        const c = audio.createBufferSource(), cf = audio.createBiquadFilter(), cg = audio.createGain();
+        c.buffer = ruido; cf.type = "bandpass"; cf.frequency.value = 1800; cf.Q.value = 0.8;
+        cg.gain.setValueAtTime(0.35, t); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+        c.connect(cf).connect(cg).connect(mestre); c.start(t); c.stop(t + 0.16);
+      }
+    };
+    setInterval(() => {
+      if (!somLigado) return;
+      while (proximaBatida < audio.currentTime + 0.15) { tocar(proximaBatida, nBatida++); proximaBatida += 60 / BPM; }
+    }, 40);
+  }
+  function ligarSom(ligar) {
+    prepararAudio();
+    somLigado = ligar;
+    if (ligar) { audio.resume(); if (proximaBatida < audio.currentTime) { proximaBatida = audio.currentTime + 0.05; inicioMusica = proximaBatida; nBatida = 0; } }
+    if (botaoSom) { botaoSom.classList.toggle("ligado", ligar); botaoSom.setAttribute("aria-label", ligar ? "Desligar som" : "Ligar som"); }
+  }
+  if (FUNDO === "festa") {
+    if (botaoSom) { botaoSom.hidden = false; botaoSom.addEventListener("click", (e) => { e.stopPropagation(); ligarSom(!somLigado); }); }
+    // primeiro toque em qualquer lugar da página liga a música (se a pessoa não desligou antes)
+    const primeiro = (e) => { if (e.target.closest && e.target.closest("#som")) return; removeEventListener("pointerdown", primeiro, true); if (!somLigado) ligarSom(true); };
+    addEventListener("pointerdown", primeiro, true);
+  }
+  function volumeDaMusica(dt) {
+    if (!mestre) return;
+    const alvo = somLigado && naTela && !document.hidden ? 0.42 : 0;
+    mestre.gain.value += (alvo - mestre.gain.value) * Math.min(1, dt * 4);
   }
 
   // ---------- câmera ----------
@@ -853,10 +948,10 @@ function iniciar() {
   tela.addEventListener("pointerdown", (e) => { arrastando = true; xAntes = e.clientX; tAntes = performance.now(); velGiro = 0; tela.setPointerCapture(e.pointerId); tela.style.cursor = "grabbing"; });
   tela.addEventListener("pointermove", (e) => {
     if (!arrastando) return;
-    // giro leve: o dedo mexe a taça devagar, e a velocidade tem limite (nada de girar rápido)
-    const agora = performance.now(), d = ((e.clientX - xAntes) / Math.max(320, tela.clientWidth)) * Math.PI * 1.1;
+    // arrastar a tela inteira de um lado ao outro dá uma volta completa na taça
+    const agora = performance.now(), d = ((e.clientX - xAntes) / Math.max(320, tela.clientWidth)) * Math.PI * 2;
     giro += d;
-    velGiro = Math.max(-2.2, Math.min(2.2, d / Math.max(0.008, (agora - tAntes) / 1000)));
+    velGiro = Math.max(-7, Math.min(7, d / Math.max(0.008, (agora - tAntes) / 1000)));
     xAntes = e.clientX; tAntes = agora;
   });
   const soltar = () => { arrastando = false; tela.style.cursor = "grab"; };
@@ -947,7 +1042,6 @@ function iniciar() {
 
   // ---------- toque duplo na taça: ela quebra, o drink derrama e, depois de uns segundos, um drink novo é servido ----------
   const queda = { fruta: { y: 0, v: 0 }, canudo: { y: 0, v: 0 } };
-  const sorteio = (a, b) => a + Math.random() * (b - a);
   function quebrar() {
     if (quebrada || tempo < 6.2) return;
     quebrada = true; tQuebra = tempo;
@@ -1018,12 +1112,16 @@ function iniciar() {
     for (const o of escondidos) o.visible = false;
   }
   // medidor de fluidez: se a média dos quadros passar de ~22 ms, baixa a resolução até ficar fluido
-  let somaQ = 0, nQ = 0;
-  function medir(ms) {
+  // (não mede enquanto a pessoa rola a página nem com a abertura fora da tela: rolar deixa os quadros lentos e baixava a nitidez à toa)
+  let somaQ = 0, nQ = 0, rolandoAte = 0, naTela = true;
+  addEventListener("scroll", () => { rolandoAte = performance.now() + 600; somaQ = 0; nQ = 0; }, { passive: true });
+  new IntersectionObserver(([e]) => { naTela = e.isIntersecting; }).observe(palco);
+  function medir(ms, agora) {
+    if (agora < rolandoAte) return;
     somaQ += ms; nQ++;
-    if (nQ < 40) return;
+    if (nQ < 90) return;
     const media = somaQ / nQ; somaQ = 0; nQ = 0;
-    if (media > 22 && resolucao > 1) { resolucao = Math.max(1, resolucao - 0.25); renderer.setPixelRatio(resolucao); ajustar(); }
+    if (media > 30 && resolucao > 1.25) { resolucao = Math.max(1.25, resolucao - 0.25); renderer.setPixelRatio(resolucao); ajustar(); }
   }
 
   function quadro(agora) {
@@ -1031,16 +1129,21 @@ function iniciar() {
     const dt = Math.min(1 / 30, ms / 1000);
     ultimo = agora;
     if (!estudioPronto && agora - inicioAbertura < 2500) { requestAnimationFrame(quadro); return; }
-    if (ms > 0 && ms < 200) medir(ms);
+    volumeDaMusica(Math.max(dt, 0.016));
+    if (!naTela) { requestAnimationFrame(quadro); return; } // fora da tela: não gasta nada
+    if (ms > 0 && ms < 200) medir(ms, agora);
     // luz de trás da laranja (atrás e acima da taça), levada para o espaço da câmera
     uLuzAtras.value.set(1.0, 1.7, -4.4).normalize().transformDirection(camera.matrixWorldInverse);
     passo(dt);
     // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve; por cima, o giro do dedo (com embalo)
     // ao soltar: o embalo continua e uma "mola" leva a taça, sem tranco, até a frente mais próxima (JC Drinks aparecendo)
     if (!arrastando) {
-      const volta = Math.PI * 2, alvo = Math.round((giro + velGiro * 0.35) / volta) * volta;
-      velGiro += ((alvo - giro) * 6 - velGiro * 4.6) * dt;
-      velGiro = Math.max(-2.2, Math.min(2.2, velGiro));
+      // primeiro o embalo vai acabando (gira livre, dá a volta inteira); quando fica devagar, uma mola leva para a frente
+      if (Math.abs(velGiro) > 1.1) velGiro *= Math.pow(0.32, dt);
+      else {
+        const volta = Math.PI * 2, alvo = Math.round(giro / volta) * volta;
+        velGiro += ((alvo - giro) * 5 - velGiro * 4.2) * dt;
+      }
       giro += velGiro * dt;
     }
     const rotAntes = copo.rotation.y;
@@ -1049,17 +1152,18 @@ function iniciar() {
     if (dt > 0 && !quebrada) {
       const velRot = (copo.rotation.y - rotAntes) / dt, tranco = velRot - velRotAntes;
       velRotAntes = velRot;
-      giroSuco = giroSuco * Math.exp(-1.8 * dt) - tranco * 0.35;
-      // ondinha sutil: só um empurrão leve no lado que "bate" no vidro, no máximo umas 6 vezes por segundo
+      giroSuco = giroSuco * Math.exp(-1.6 * dt) - tranco * 0.45;
+      // ondinha suave: um empurrão no lado que "bate" no vidro quando a taça acelera ou freia
       esperaOnda -= dt;
-      const forca = Math.min(0.0035, Math.abs(tranco) * 0.0009);
-      if (forca > 0.0008 && tampa.visible && esperaOnda <= 0) {
-        esperaOnda = 0.16;
+      const forca = Math.min(0.009, Math.abs(tranco) * 0.0022);
+      if (forca > 0.0006 && tampa.visible && esperaOnda <= 0) {
+        esperaOnda = 0.09;
         const r = rDentro(nivel) * 0.7, a = Math.sign(tranco) > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
         empurrar(Math.cos(a) * r, Math.sin(a) * r, forca);
       }
     }
     if (neon.length) mexerNeon(tempo);
+    if (dancarinos.length) dancar(batida());
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
   }
