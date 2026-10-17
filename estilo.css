@@ -401,3 +401,7 @@ a.botao { display: inline-block; text-align: center; text-decoration: none; padd
 [data-fundo="festa"] .abertura-pe .chamada::before { background: #f3ede2; }
 [data-fundo="festa"] .abertura-pe .chamada:hover, [data-fundo="festa"] .abertura-pe .chamada:focus-visible { color: #050508; }
 [data-fundo="festa"] .abertura-pe .link-fino { color: #b9b2a5; border-color: rgba(185,178,165,.4); }
+
+/* sem barra de rolagem aparecendo do lado (a página continua rolando normal) */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }

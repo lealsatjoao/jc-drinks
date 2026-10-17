@@ -11,8 +11,6 @@
 import * as THREE from "three";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { Reflector } from "three/addons/objects/Reflector.js";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const palco = document.getElementById("palco");
 const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -34,7 +32,8 @@ function iniciar() {
   // começa nítida e, se os quadros demorarem, baixa um pouco até ficar fluido
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   if (!renderer.getContext()) throw new Error("sem WebGL");
-  let resolucao = Math.min(devicePixelRatio, 2);
+  const celular = Math.min(innerWidth, innerHeight) < 700;
+  let resolucao = Math.min(devicePixelRatio, celular ? 1.5 : 2);
   renderer.setPixelRatio(resolucao);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -47,10 +46,15 @@ function iniciar() {
 
   // reflexo de estúdio de verdade
   const pm = new THREE.PMREMGenerator(renderer);
+  // a animação só começa depois que o reflexo carregou (preparar o reflexo dá uma engasgada; assim ela não aparece no meio do movimento)
+  let estudioPronto = false;
+  const inicioAbertura = performance.now();
   new RGBELoader().load("img/estudio.hdr", (hdr) => {
     cena.environment = pm.fromEquirectangular(hdr).texture;
     hdr.dispose();
-  });
+    renderer.compile(cena, camera);
+    estudioPronto = true;
+  }, undefined, () => { estudioPronto = true; });
   const luz = new THREE.DirectionalLight("#ffffff", 1.3);
   luz.position.set(-3, 6, 4);
   cena.add(luz);
@@ -160,14 +164,19 @@ function iniciar() {
   };
 
   // corpo do suco (cone que sobe junto com o nível)
+  // o suco num cone é sempre o mesmo cone, só maior: a malha é feita uma vez e, quando o nível sobe, os pontos são esticados
   const SEG = 72;
-  const corpo = new THREE.Mesh(new THREE.BufferGeometry(), suco);
+  const ptsCorpo = [new THREE.Vector2(0.0001, A)];
+  for (let i = 1; i <= 10; i++) { const y = A + i / 10; ptsCorpo.push(new THREE.Vector2(Math.max(0.0001, (y - A) * K - 0.003), y)); }
+  const geoCorpo = new THREE.LatheGeometry(ptsCorpo, SEG);
+  const baseCorpo = Float32Array.from(geoCorpo.attributes.position.array);
+  const corpo = new THREE.Mesh(geoCorpo, suco);
+  corpo.frustumCulled = false;
   copo.add(corpo);
   function refazerCorpo(nivel) {
-    const pts = [new THREE.Vector2(0.0001, A)];
-    for (let i = 1; i <= 10; i++) { const y = A + (nivel - A) * (i / 10); pts.push(new THREE.Vector2(rDentro(y), y)); }
-    corpo.geometry.dispose();
-    corpo.geometry = new THREE.LatheGeometry(pts, SEG);
+    const k = nivel - A, p = geoCorpo.attributes.position.array;
+    for (let i = 0; i < p.length; i += 3) { p[i] = baseCorpo[i] * k; p[i + 1] = A + (baseCorpo[i + 1] - A) * k; p[i + 2] = baseCorpo[i + 2] * k; }
+    geoCorpo.attributes.position.needsUpdate = true;
   }
 
   // superfície com ondas: malha polar lida de uma grade de altura (equação de onda)
@@ -446,7 +455,10 @@ function iniciar() {
       });
     }
   }
+  let gotasNaTela = false;
   function moverGotas(dt, superficie) {
+    if (!vivas.length && !gotasNaTela) return;
+    gotasNaTela = vivas.length > 0;
     for (let i = vivas.length - 1; i >= 0; i--) {
       const g = vivas[i];
       if (g.parede) { g.vy = Math.max(-0.35, g.vy - G * 0.3 * dt); g.r *= 1 - dt * 0.6; } // escorre no vidro e vai sumindo
@@ -707,7 +719,6 @@ function iniciar() {
 
   // ---------- fundo de festa: preto, com luzes neon passando atrás da taça e refletindo no balcão ----------
   const neon = [];
-  let reflexoBalcao = null;
   if (FUNDO === "festa") {
     cena.background = new THREE.Color("#050508");
     sombra.visible = false;
@@ -721,15 +732,15 @@ function iniciar() {
     })();
     const CORES = ["#ff2bd6", "#22e4ff", "#ffb43a", "#8a5cff", "#ff3b6b"];
     // feixes de luz compridos que varrem devagar, como luz de pista
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 5; i++) {
       const cor = new THREE.Color(CORES[i % CORES.length]);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 16), new THREE.MeshBasicMaterial({ map: brilhoTex, color: cor, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }));
-      m.position.set(-6 + i * 2, 2, -6 - (i % 3));
+      m.position.set(-5 + i * 2.5, 2, -6 - (i % 3));
       cena.add(m);
       neon.push({ m, tipo: "feixe", fase: Math.random() * 6.28, vel: 0.12 + Math.random() * 0.12, base: -0.9 + Math.random() * 1.8, forca: 0.35 + Math.random() * 0.25 });
     }
     // bolinhas de luz desfocadas (bokeh) passando ao fundo
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 14; i++) {
       const cor = new THREE.Color(CORES[i % CORES.length]);
       const tam = 0.3 + Math.random() * 0.9;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(tam, tam), new THREE.MeshBasicMaterial({ map: brilhoTex, color: cor, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -743,15 +754,13 @@ function iniciar() {
       cena.add(l);
       neon.push({ m: l, tipo: "luz", fase: i * 2.1, vel: 0.35 + i * 0.1 });
     }
-    // balcão preto brilhante que reflete a taça e as luzes
-    // o balcão termina um pouco atrás da taça: dali para trás é só o escuro da festa, com as luzes
-    const espelho = new Reflector(new THREE.PlaneGeometry(40, 8), { textureWidth: Math.min(1024, innerWidth * 0.75), textureHeight: Math.min(1024, innerHeight * 0.75), color: 0x5a5a62 });
-    reflexoBalcao = espelho;
-    espelho.rotation.x = -Math.PI / 2; espelho.position.set(0, -0.001, 1.5);
-    cena.add(espelho);
-    const balcao = new THREE.Mesh(new THREE.PlaneGeometry(40, 8), new THREE.MeshBasicMaterial({ color: "#050508", transparent: true, opacity: 0.72 }));
-    balcao.rotation.x = -Math.PI / 2; balcao.position.set(0, 0.0005, 1.5);
+    // balcão preto (termina um pouco atrás da taça) com um brilho macio de luz embaixo dela
+    const balcao = new THREE.Mesh(new THREE.PlaneGeometry(40, 8), new THREE.MeshBasicMaterial({ color: "#070709" }));
+    balcao.rotation.x = -Math.PI / 2; balcao.position.set(0, 0, 1.5);
     cena.add(balcao);
+    const brilhoChao = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshBasicMaterial({ map: brilhoTex, color: "#ffcf9a", transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+    brilhoChao.rotation.x = -Math.PI / 2; brilhoChao.position.y = 0.002;
+    cena.add(brilhoChao);
     // no escuro, o contorno do cristal e do gelo é claro (reflexo), não escuro
   }
   function mexerNeon(t) {
@@ -771,27 +780,28 @@ function iniciar() {
     // a taça com o enfeite (2,3 de altura, 1,6 de largura) ocupa o meio da tela, entre o logo e o botão, em qualquer tamanho
     const tg = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const d = Math.max(5.2 / 2 / tg, 2.5 / 2 / (tg * camera.aspect));
-    const ang = controle ? controle.getAzimuthalAngle() : 0;
-    camera.position.set(Math.sin(ang) * d, 1.12 + d * 0.1, Math.cos(ang) * d);
+    camera.position.set(0, 1.12 + d * 0.1, d);
     camera.lookAt(0, 1.12, 0);
     camera.updateProjectionMatrix();
-    if (controle) { controle.target.set(0, 1.12, 0); controle.update(); }
   }
-  let controle = null;
   ajustar();
-  // girar a taça 360° arrastando o dedo (ou o mouse) para os lados, com embalo
-  controle = new OrbitControls(camera, renderer.domElement);
-  controle.target.set(0, 1.12, 0);
-  controle.enableZoom = false; controle.enablePan = false;
-  controle.enableDamping = true; controle.dampingFactor = 0.07; controle.rotateSpeed = 0.7;
-  const polar = controle.getPolarAngle();
-  controle.minPolarAngle = polar - 0.18; controle.maxPolarAngle = polar + 0.08;
-  controle.update();
-  renderer.domElement.style.touchAction = "pan-y"; // arrastar para cima/baixo continua rolando a página
-  renderer.domElement.style.cursor = "grab";
-  let mexendo = false;
-  controle.addEventListener("start", () => { mexendo = true; renderer.domElement.style.cursor = "grabbing"; });
-  controle.addEventListener("end", () => { mexendo = false; renderer.domElement.style.cursor = "grab"; });
+
+  // ---------- girar SÓ a taça com o dedo (ou o mouse), 360°, com embalo; o fundo fica parado ----------
+  const tela = renderer.domElement;
+  tela.style.touchAction = "pan-y"; // arrastar para cima/baixo continua rolando a página
+  tela.style.cursor = "grab";
+  let giro = 0, velGiro = 0, arrastando = false, xAntes = 0, tAntes = 0;
+  tela.addEventListener("pointerdown", (e) => { arrastando = true; xAntes = e.clientX; tAntes = performance.now(); velGiro = 0; tela.setPointerCapture(e.pointerId); tela.style.cursor = "grabbing"; });
+  tela.addEventListener("pointermove", (e) => {
+    if (!arrastando) return;
+    const agora = performance.now(), d = ((e.clientX - xAntes) / Math.max(320, tela.clientWidth)) * Math.PI * 2.2;
+    giro += d;
+    velGiro = d / Math.max(0.008, (agora - tAntes) / 1000);
+    xAntes = e.clientX; tAntes = agora;
+  });
+  const soltar = () => { arrastando = false; tela.style.cursor = "grab"; };
+  tela.addEventListener("pointerup", soltar);
+  tela.addEventListener("pointercancel", soltar);
   addEventListener("resize", ajustar);
 
   // ---------- a cena andando ----------
@@ -868,27 +878,27 @@ function iniciar() {
     renderer.compile(cena, camera);
     for (const o of escondidos) o.visible = false;
   }
-  // medidor de fluidez: se a média dos quadros passar de ~22 ms, baixa a resolução (e, se precisar, tira o reflexo do balcão)
+  // medidor de fluidez: se a média dos quadros passar de ~22 ms, baixa a resolução até ficar fluido
   let somaQ = 0, nQ = 0;
   function medir(ms) {
     somaQ += ms; nQ++;
     if (nQ < 40) return;
     const media = somaQ / nQ; somaQ = 0; nQ = 0;
     if (media > 22 && resolucao > 1) { resolucao = Math.max(1, resolucao - 0.25); renderer.setPixelRatio(resolucao); ajustar(); }
-    else if (media > 26 && reflexoBalcao && reflexoBalcao.visible) reflexoBalcao.visible = false;
   }
 
   function quadro(agora) {
     const ms = agora - ultimo;
     const dt = Math.min(1 / 30, ms / 1000);
     ultimo = agora;
+    if (!estudioPronto && agora - inicioAbertura < 2500) { requestAnimationFrame(quadro); return; }
     if (ms > 0 && ms < 200) medir(ms);
-    controle.update();
     // luz de trás da laranja (atrás e acima da taça), levada para o espaço da câmera
     uLuzAtras.value.set(1.0, 1.7, -4.4).normalize().transformDirection(camera.matrixWorldInverse);
     passo(dt);
-    // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve
-    copo.rotation.y = tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3);
+    // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve; por cima, o giro do dedo (com embalo)
+    if (!arrastando) { giro += velGiro * dt; velGiro *= Math.pow(0.05, dt); }
+    copo.rotation.y = giro + (tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3));
     if (neon.length) mexerNeon(tempo);
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
