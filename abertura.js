@@ -777,7 +777,8 @@ function iniciar() {
   cena.add(sombra);
 
   // ---------- fundo de festa: preto, com luzes neon passando atrás da taça e refletindo no balcão ----------
-  const neon = [], dancarinos = [];
+  const neon = [];
+  let multidao = null;
   const sorteio = (a, b) => a + Math.random() * (b - a);
   if (FUNDO === "festa") {
     cena.background = new THREE.Color("#050508");
@@ -825,38 +826,100 @@ function iniciar() {
     const nevoa = new THREE.Mesh(new THREE.PlaneGeometry(22, 7), new THREE.MeshBasicMaterial({ map: brilhoTex, color: "#3a2a5a", transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
     nevoa.position.set(0, 1.6, -9.5);
     cena.add(nevoa);
-    // sombras de pessoas dançando no fundo (só a silhueta, em contraluz), no ritmo da música
-    const sombraMat = new THREE.MeshBasicMaterial({ color: "#040308", transparent: true, opacity: 0.88 });
-    const capsula = (r, l) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 4, 10), sombraMat);
-    // (bonecos desligados: o João achou artificial; trocar por silhueta de gente de verdade)
-    for (let i = 0; i < 0; i++) {
-      const p = new THREE.Group(), alt = sorteio(1.05, 1.4);
-      const tronco = capsula(0.17, 0.5); tronco.position.y = 1.2;
-      const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), sombraMat); cabeca.position.y = 1.72;
-      const bracoE = new THREE.Group(), bracoD = new THREE.Group();
-      for (const [b, lado] of [[bracoE, -1], [bracoD, 1]]) { const m = capsula(0.055, 0.55); m.position.y = -0.3; b.add(m); b.position.set(0.2 * lado, 1.48, 0); p.add(b); }
-      const pernaE = capsula(0.075, 0.7), pernaD = capsula(0.075, 0.7);
-      pernaE.position.set(-0.1, 0.45, 0); pernaD.position.set(0.1, 0.45, 0);
-      p.add(tronco, cabeca, pernaE, pernaD);
-      p.scale.setScalar(alt);
-      // atrás do balcão: aparecem só do peito para cima, como a pista lá no fundo
-      p.position.set(-7.5 + i * 1.5 + sorteio(-0.35, 0.35), -1.05 - sorteio(0, 0.25), -7 - sorteio(0, 1.8));
-      p.rotation.y = sorteio(-0.5, 0.5);
-      cena.add(p);
-      dancarinos.push({ p, tronco, cabeca, bracoE, bracoD, fase: sorteio(0, 1), jeito: Math.floor(sorteio(0, 3)), baseY: p.position.y });
-    }
+    // sombras de pessoas dançando lá no fundo, desenhadas em código com contorno de gente (ombro, cabeça, cabelo, braços)
+    // e movimento natural (o peso vai de um lado para o outro, a cabeça acompanha a batida, cada braço no seu tempo).
+    // É desenhado pequeno e ampliado: fica desfocado, como gente na névoa atrás do bar.
+    multidao = criarMultidao();
+    cena.add(multidao.malha);
   }
-  function dancar(batida) {
-    // batida: tempo em "batidas" da música (cresce 1 por batida); cada pessoa mexe de um jeito
-    for (const d of dancarinos) {
-      const b = batida + d.fase, pulo = Math.abs(Math.sin(b * Math.PI));
-      d.p.position.y = d.baseY + pulo * 0.07;
-      d.p.rotation.z = Math.sin(b * Math.PI * 0.5) * 0.08;
-      d.cabeca.position.x = Math.sin(b * Math.PI) * 0.03;
-      if (d.jeito === 0) { d.bracoE.rotation.z = Math.PI - 0.3 + Math.sin(b * Math.PI) * 0.35; d.bracoD.rotation.z = -Math.PI + 0.3 - Math.sin(b * Math.PI) * 0.35; } // mãos para cima
-      else if (d.jeito === 1) { d.bracoE.rotation.z = 0.6 + Math.sin(b * Math.PI) * 0.6; d.bracoD.rotation.z = -0.6 - Math.cos(b * Math.PI) * 0.6; } // braços balançando
-      else { d.bracoE.rotation.z = Math.PI * 0.85; d.bracoD.rotation.z = -0.4 - pulo * 0.5; } // uma mão para cima
+  function criarMultidao() {
+    const W = 512, Hc = 170, c = document.createElement("canvas"); c.width = W; c.height = Hc;
+    const x = c.getContext("2d"), tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+    const malha = new THREE.Mesh(new THREE.PlaneGeometry(19, 19 * Hc / W), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }));
+    malha.position.set(0, 2.1, -7.2);
+    const ESTILOS = 4, pessoas = [];
+    const fila = (n, y0, esc, cor, larg) => {
+      for (let i = 0; i < n; i++) pessoas.push({
+        x: (i + 0.5) / n * W + sorteio(-larg, larg), y: Hc * y0 + sorteio(-4, 4), e: esc * sorteio(0.88, 1.12), cor,
+        fase: sorteio(0, 2), ritmo: sorteio(0.97, 1.03), cabelo: Math.floor(sorteio(0, 4)), estilo: Math.floor(sorteio(0, ESTILOS)),
+        mistura: 0, proximo: 0, vira: sorteio(-0.25, 0.25),
+      });
+    };
+    fila(9, 0.86, 0.62, "rgba(14,10,26,0.78)", 14);   // fileira de trás (mais longe, mais clara na névoa)
+    fila(6, 1.04, 0.86, "rgba(3,2,7,0.96)", 20);       // fileira da frente
+    const suaveS = (t) => t * t * (3 - 2 * t);
+    // braço: a1 = ângulo do braço a partir de "pendurado" (0 = para baixo, π = para cima), a2 = quanto o cotovelo dobra
+    const bracos = (estilo, b, lado) => {
+      const pulso = Math.pow(Math.max(0, Math.cos(b * Math.PI * 2)), 3); // marca a batida
+      const vai = Math.sin(b * Math.PI);                                 // vai e volta em 2 batidas
+      switch (estilo) {
+        case 0: return [2.75 + 0.15 * vai * lado, 0.3 + 0.25 * pulso];                                   // as duas mãos para cima, balançando
+        case 1: return lado > 0 ? [2.85 - 0.3 * pulso, 0.15] : [0.35 + 0.25 * vai, 1.2 + 0.3 * vai];     // uma mão para cima marcando a batida
+        case 2: return [0.55 + 0.2 * vai * lado, 1.9 - 0.3 * pulso];                                     // cotovelo dobrado, curtindo
+        default: { const palma = Math.pow(Math.max(0, Math.cos(b * Math.PI)), 6); return [2.6 - 0.25 * palma, 0.6 + 0.5 * palma]; } // palmas no alto
+      }
+    };
+    const desenharPessoa = (p, b) => {
+      const s = 30 * p.e, bt = b * p.ritmo + p.fase;
+      const desce = (1 - Math.cos(bt * Math.PI * 2)) * 0.5;                 // dobra o joelho na batida
+      const peso = Math.sin(bt * Math.PI);                                  // o peso vai de um lado pro outro
+      const quadril = { x: p.x + peso * s * 0.12, y: p.y + desce * s * 0.08 };
+      const incl = peso * 0.1 + p.vira * 0.3;                               // o tronco inclina junto
+      const tronco = s * 1.05, larg = s * 0.55;
+      const ombroC = { x: quadril.x + Math.sin(incl) * tronco, y: quadril.y - Math.cos(incl) * tronco };
+      const ox = Math.cos(incl) * larg * 0.5, oy = Math.sin(incl) * larg * 0.5;
+      const oE = { x: ombroC.x - ox, y: ombroC.y - oy }, oD = { x: ombroC.x + ox, y: ombroC.y + oy };
+      x.fillStyle = p.cor; x.strokeStyle = p.cor; x.lineCap = "round"; x.lineJoin = "round";
+      // tronco: ombros arredondados, cintura mais fina, quadril
+      const cint = larg * 0.36, base = larg * 0.44;
+      x.beginPath();
+      x.moveTo(quadril.x - base, quadril.y + s * 0.6);
+      x.lineTo(quadril.x - base, quadril.y);
+      x.quadraticCurveTo(quadril.x - cint + Math.sin(incl) * s * 0.4, quadril.y - tronco * 0.55, oE.x - s * 0.04, oE.y + s * 0.16);
+      x.quadraticCurveTo(oE.x - s * 0.06, oE.y - s * 0.06, oE.x + s * 0.12, oE.y - s * 0.04);
+      x.lineTo(oD.x - s * 0.12, oD.y - s * 0.04);
+      x.quadraticCurveTo(oD.x + s * 0.06, oD.y - s * 0.06, oD.x + s * 0.04, oD.y + s * 0.16);
+      x.quadraticCurveTo(quadril.x + cint + Math.sin(incl) * s * 0.4, quadril.y - tronco * 0.55, quadril.x + base, quadril.y);
+      x.lineTo(quadril.x + base, quadril.y + s * 0.6);
+      x.closePath(); x.fill();
+      // pescoço e cabeça (acena com a batida, um tiquinho atrasada)
+      const aceno = Math.sin((bt - 0.15) * Math.PI * 2) * 0.12 + incl * 0.6;
+      const pesc = { x: ombroC.x + Math.sin(incl) * s * 0.12, y: ombroC.y - s * 0.12 };
+      x.lineWidth = s * 0.17; x.beginPath(); x.moveTo(ombroC.x, ombroC.y); x.lineTo(pesc.x, pesc.y); x.stroke();
+      const cab = { x: pesc.x + Math.sin(aceno) * s * 0.22, y: pesc.y - Math.cos(aceno) * s * 0.2 };
+      x.beginPath(); x.ellipse(cab.x, cab.y, s * 0.15, s * 0.19, aceno, 0, Math.PI * 2); x.fill();
+      // cabelo
+      if (p.cabelo === 1) { x.beginPath(); x.ellipse(cab.x, cab.y + s * 0.1, s * 0.2, s * 0.3, aceno * 1.4, 0, Math.PI * 2); x.fill(); }      // solto, até o ombro
+      else if (p.cabelo === 2) { x.beginPath(); x.ellipse(cab.x - Math.cos(aceno) * s * 0.16, cab.y - s * 0.04 + Math.sin(bt * Math.PI * 2) * s * 0.03, s * 0.08, s * 0.14, 0.6, 0, Math.PI * 2); x.fill(); } // rabo de cavalo
+      else if (p.cabelo === 3) { x.beginPath(); x.ellipse(cab.x, cab.y - s * 0.08, s * 0.2, s * 0.15, aceno, 0, Math.PI * 2); x.fill(); } // cabelo volumoso
+      // braços: ombro → cotovelo → mão, mais grossos perto do ombro
+      for (const lado of [-1, 1]) {
+        const o = lado < 0 ? oE : oD;
+        let [a1, a2] = bracos(p.estilo, bt + (lado > 0 ? 0 : 0.08), lado);
+        if (p.mistura > 0) { const [n1, n2] = bracos(p.proximo, bt, lado), k = suaveS(p.mistura); a1 += (n1 - a1) * k; a2 += (n2 - a2) * k; }
+        const lA = s * 0.5, lB = s * 0.46;
+        const cot = { x: o.x + lado * Math.sin(a1) * lA, y: o.y + Math.cos(a1) * lA };
+        const mao = { x: cot.x + lado * Math.sin(a1 + a2) * lB, y: cot.y + Math.cos(a1 + a2) * lB };
+        x.lineWidth = s * 0.16; x.beginPath(); x.moveTo(o.x, o.y + s * 0.03); x.lineTo(cot.x, cot.y); x.stroke();
+        x.lineWidth = s * 0.12; x.beginPath(); x.moveTo(cot.x, cot.y); x.lineTo(mao.x, mao.y); x.stroke();
+        x.beginPath(); x.arc(mao.x, mao.y, s * 0.075, 0, Math.PI * 2); x.fill();
+      }
+    };
+    let ultimoDesenho = -1;
+    function desenhar(b, t) {
+      if (Math.abs(t - ultimoDesenho) < 1 / 30) return; // 30 vezes por segundo já fica liso
+      ultimoDesenho = t;
+      x.clearRect(0, 0, W, Hc);
+      for (const p of pessoas) {
+        // de tempos em tempos cada um muda o jeito de dançar, passando de um para o outro sem tranco
+        if (p.mistura > 0) { p.mistura += 0.03; if (p.mistura >= 1) { p.estilo = p.proximo; p.mistura = 0; } }
+        else if (Math.random() < 0.004) { p.proximo = (p.estilo + 1 + Math.floor(sorteio(0, ESTILOS - 1))) % ESTILOS; p.mistura = 0.001; }
+        desenharPessoa(p, b);
+      }
+      tex.needsUpdate = true;
     }
+    return { malha, desenhar };
   }
   function mexerNeon(t) {
     const acende = Math.min(1, Math.max(0, (t - 0.3) / 1.5));
@@ -1164,7 +1227,7 @@ function iniciar() {
       }
     }
     if (neon.length) mexerNeon(tempo);
-    if (dancarinos.length) dancar(batida());
+    if (multidao) multidao.desenhar(batida(), tempo);
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
   }
