@@ -83,6 +83,50 @@ function iniciar() {
   vidro.renderOrder = 2;
   copo.add(vidro);
 
+  // ---------- "JC Drinks" gravado no vidro (jateado: branco fosco), na frente do bojo ----------
+  // a letra é colocada pela medida em volta do cone (ângulo × raio), então não fica esticada nem torta
+  const gravura = (() => {
+    const c = document.createElement("canvas"); c.width = 1024; c.height = 768;
+    const t = new THREE.CanvasTexture(c);
+    const desenhar = () => {
+      const x = c.getContext("2d");
+      x.clearRect(0, 0, 1024, 768);
+      x.fillStyle = "#ffffff"; x.textAlign = "center"; x.textBaseline = "alphabetic";
+      x.font = "400 420px Marcellus, Georgia, serif";
+      x.fillText("J", 512 - 96, 470); x.fillText("C", 512 + 96, 470);
+      x.font = "400 62px Jost, Helvetica, sans-serif";
+      if ("letterSpacing" in x) x.letterSpacing = "38px";
+      x.fillText("DRINKS", 512 + 19, 630);
+      t.needsUpdate = true;
+    };
+    desenhar();
+    document.fonts?.load("420px Marcellus").then(() => document.fonts.load("74px Jost")).then(desenhar).catch(() => {});
+    return t;
+  })();
+  const Y0_GRAV = 1.25, ALT_GRAV = 0.3, LARG_GRAV = 0.4;
+  const raioFora = (y) => 0.07 + (y - 1.04) * (0.59 / 0.738) + 0.0015;
+  const jateado = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.9, transparent: true, opacity: 0.62, depthWrite: false, side: THREE.FrontSide });
+  jateado.onBeforeCompile = (sh) => {
+    sh.uniforms.uGravura = { value: gravura };
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vGrav;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGrav = position;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vGrav; uniform sampler2D uGravura;")
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        float angG = atan(vGrav.x, vGrav.z);
+        vec2 uvG = vec2(0.5 + angG * length(vGrav.xz) / ${LARG_GRAV.toFixed(3)}, (vGrav.y - ${Y0_GRAV.toFixed(3)}) / ${ALT_GRAV.toFixed(3)});
+        if (uvG.x < 0.0 || uvG.x > 1.0 || uvG.y < 0.0 || uvG.y > 1.0) discard;
+        float marca = texture2D(uGravura, vec2(uvG.x, uvG.y)).a;
+        if (marca < 0.02) discard;
+        diffuseColor.a *= marca;`);
+  };
+  const pontosGrav = [];
+  for (let i = 0; i <= 12; i++) { const y = Y0_GRAV - 0.02 + (ALT_GRAV + 0.04) * (i / 12); pontosGrav.push(new THREE.Vector2(raioFora(y), y)); }
+  const marcaVidro = new THREE.Mesh(new THREE.LatheGeometry(pontosGrav, 160, -1.2, 2.4), jateado);
+  marcaVidro.renderOrder = 3;
+  copo.add(marcaVidro);
+
   // ---------- material do suco: degradê laranja → groselha, com a "nuvem" de groselha afundando ----------
   const corLaranja = new THREE.Color("#ec7a0e"), corGroselha = new THREE.Color("#9c0f26");
   const uSuco = { uFundo: { value: A - 1 }, uNuvem: { value: -10 }, uNuvemForca: { value: 0 }, uLaranja: { value: corLaranja }, uGroselha: { value: corGroselha }, uTempo: { value: 0 } };
@@ -558,7 +602,7 @@ function iniciar() {
     (() => {
       // 12 gomos fechados, cada um com a sua cor; o papel afunda um pouco no meio de cada gomo (dobra entre as varetas)
       const R_GC = 0.3, ALT_GC = 0.11, GOMOS = 12, SUB = 8, ANEIS_GC = 6;
-      const c1 = new THREE.Color("#c8322f"), c2 = new THREE.Color("#f2a03d");
+      const c1 = new THREE.Color("#c39545"), c2 = new THREE.Color("#f4ecdc"); // dourado e creme, as cores do site
       const vs = [], cs = [], idx = [];
       for (let gm = 0; gm < GOMOS; gm++) {
         const base = vs.length / 3, cor = gm % 2 ? c1 : c2;
@@ -590,7 +634,7 @@ function iniciar() {
   anel.position.y = -0.005;
   chapeu.position.y = 0.05;
   // por baixo, o papel é mais claro (como guarda-chuva de verdade) e fecha a cobertura
-  const forro = new THREE.Mesh(chapeu.geometry, new THREE.MeshPhysicalMaterial({ color: "#f6dcc0", roughness: 0.85, side: THREE.DoubleSide }));
+  const forro = new THREE.Mesh(chapeu.geometry, new THREE.MeshPhysicalMaterial({ color: "#efe3cc", roughness: 0.85, side: THREE.DoubleSide }));
   forro.position.y = -0.004;
   chapeu.add(forro);
   guarda.add(chapeu, anel);
@@ -707,7 +751,8 @@ function iniciar() {
     const dt = Math.min(1 / 30, (agora - ultimo) / 1000);
     ultimo = agora;
     passo(dt);
-    copo.rotation.y = -0.4 + tempo * 0.06;
+    // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve
+    copo.rotation.y = tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3);
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
   }
