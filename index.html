@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Jost:wght@300;400;500;600&display=swap">
-  <link rel="stylesheet" href="estilo.css?v=1792295000">
+  <link rel="stylesheet" href="estilo.css?v=1792297000">
 </head>
 <body class="inicio">
   <script>document.documentElement.classList.add("anima"); document.documentElement.dataset.fundo = new URLSearchParams(location.search).get("fundo") || "festa";</script>
@@ -28,8 +28,17 @@
     <div class="abertura-texto">
       <svg class="logo" viewBox="0 0 320 210" role="img" aria-label="JC Drinks">
         <defs>
-          <linearGradient id="ouro" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#d9b977"/><stop offset=".55" stop-color="#b48a45"/><stop offset="1" stop-color="#8a6630"/>
+          <!-- dourado cromado: faixas claras e escuras bem marcadas, como metal polido, e um brilho que passa devagar -->
+          <linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1" spreadMethod="reflect">
+            <stop offset="0" stop-color="#7a5214"/>
+            <stop offset=".16" stop-color="#d9a73e"/>
+            <stop offset=".3" stop-color="#fff6d2"/>
+            <stop offset=".38" stop-color="#f1c862"/>
+            <stop offset=".54" stop-color="#9c6a1c"/>
+            <stop offset=".7" stop-color="#f7dc8e"/>
+            <stop offset=".84" stop-color="#c08a2e"/>
+            <stop offset="1" stop-color="#fff1c2"/>
+            <animateTransform attributeName="gradientTransform" type="translate" values="-0.6 -0.6; 0.6 0.6; -0.6 -0.6" dur="9s" repeatCount="indefinite"/>
           </linearGradient>
         </defs>
         <g fill="url(#ouro)">
@@ -123,9 +132,9 @@
       <p><a href="https://www.instagram.com/jc_drinksoficial/" target="_blank" rel="noopener">@jc_drinksoficial</a></p>
     </footer>
   </main>
-  <script src="inicio.js?v=1792295000"></script>
+  <script src="inicio.js?v=1792297000"></script>
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/" } }</script>
-  <script type="module" src="abertura.js?v=1792295000"></script>
+  <script type="module" src="abertura.js?v=1792297000"></script>
   <script>
     // rede de segurança: se o 3D não carregar, mostra a foto e o logo mesmo assim
     setTimeout(() => { const d = document.documentElement; if (!d.classList.contains("abertura-pronta")) { if (!document.querySelector("#palco canvas")) d.classList.add("sem-3d"); d.classList.add("abertura-pronta"); } }, 9000);

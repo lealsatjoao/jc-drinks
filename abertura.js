@@ -5,13 +5,14 @@
 //  - onde ele bate, a superfície afunda e faz ondas (sem gotinhas voando, para parecer de verdade);
 //  - a superfície do suco tem equação de onda: treme no impacto, quando o gelo boia e quando as gotas caem;
 //  - a groselha entra pela superfície e afunda como uma nuvem até o fundo (é mais densa);
-//  - a rodela de laranja cai e encaixa na borda e o canudo com guarda-chuva cai e se apoia no gelo.
+//  - a meia rodela de laranja cai e encaixa na borda e o canudo com guarda-chuva cai e se apoia no gelo.
 // O vidro reflete uma foto 360° de estúdio (img/estudio.hdr, Poly Haven, CC0).
 // Sem 3D (WebGL) no aparelho: fica a foto parada e o resto da página funciona igual.
 import * as THREE from "three";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { Reflector } from "three/addons/objects/Reflector.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const palco = document.getElementById("palco");
 const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -29,9 +30,12 @@ try {
 }
 
 function iniciar() {
+  // bordas suaves (sem serrilhado) em todo aparelho, e uma resolução que se ajusta sozinha:
+  // começa nítida e, se os quadros demorarem, baixa um pouco até ficar fluido
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   if (!renderer.getContext()) throw new Error("sem WebGL");
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  let resolucao = Math.min(devicePixelRatio, 2);
+  renderer.setPixelRatio(resolucao);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -84,7 +88,7 @@ function iniciar() {
       outgoingLight = mix(mix(vec3(1.0), CONTORNO_VIDRO, borda * 0.9), vec3(1.25), reflexo);
       #include <opaque_fragment>`);
   };
-  const vidro = new THREE.Mesh(new THREE.LatheGeometry(perfil, 192), cristal);
+  const vidro = new THREE.Mesh(new THREE.LatheGeometry(perfil, 128), cristal);
   vidro.renderOrder = 2;
   copo.add(vidro);
 
@@ -156,7 +160,7 @@ function iniciar() {
   };
 
   // corpo do suco (cone que sobe junto com o nível)
-  const SEG = 128;
+  const SEG = 72;
   const corpo = new THREE.Mesh(new THREE.BufferGeometry(), suco);
   copo.add(corpo);
   function refazerCorpo(nivel) {
@@ -169,7 +173,7 @@ function iniciar() {
   // superfície com ondas: malha polar lida de uma grade de altura (equação de onda)
   const N = 64, ESP = (2 * RMAX) / (N - 1);
   let hAtual = new Float32Array(N * N), hAntes = new Float32Array(N * N);
-  const ANEIS = 24, RAIOS = 96;
+  const ANEIS = 18, RAIOS = 72;
   const capPos = new Float32Array((ANEIS * RAIOS + 1) * 3);
   const capIdx = [];
   for (let a = 0; a < ANEIS; a++) for (let r = 0; r < RAIOS; r++) {
@@ -203,7 +207,9 @@ function iniciar() {
     capGeo.attributes.position.needsUpdate = true;
     capGeo.computeVertexNormals();
   }
+  let agitacao = 1;
   function ondas(nivel) {
+    if (agitacao < 1e-5) return false; // suco parado: não precisa calcular nada
     const c2 = 0.3, amort = 0.984, novo = hAntes;
     for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) {
       const i = z * N + x;
@@ -217,8 +223,13 @@ function iniciar() {
       if (px * px + pz * pz > rr) novo[z * N + x] = 0;
     }
     hAntes = hAtual; hAtual = novo;
+    let maior = 0;
+    for (let i = 0; i < novo.length; i += 7) { const v = Math.abs(novo[i]); if (v > maior) maior = v; }
+    agitacao = maior;
+    return true;
   }
   const empurrar = (x, z, forca) => {
+    agitacao = 1;
     const ix = Math.round((x + RMAX) / ESP), iz = Math.round((z + RMAX) / ESP);
     for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
       const xx = ix + dx, zz = iz + dz;
@@ -257,11 +268,12 @@ function iniciar() {
   // quinas e faces de lado ficam escuras e azuladas (luz que reflete por dentro), como gelo de verdade em fundo branco
   gelo.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
-      #define CONTORNO_GELO ${FUNDO === "festa" ? "vec3(0.75, 0.86, 0.95)" : "vec3(0.3, 0.4, 0.48)"}`).replace("#include <opaque_fragment>", `
+      #define CONTORNO_GELO ${FUNDO === "festa" ? "vec3(0.75, 0.86, 0.95)" : "vec3(0.3, 0.4, 0.48)"}
+      #define BASE_GELO ${FUNDO === "festa" ? "0.2" : "0.1"}`).replace("#include <opaque_fragment>", `
       float lado = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0);
       float luzGelo = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
       float reflexoGelo = smoothstep(0.9, 1.6, luzGelo);
-      diffuseColor.a = clamp(0.1 + lado * 0.55 + reflexoGelo * 0.75, 0.0, 1.0);
+      diffuseColor.a = clamp(BASE_GELO + lado * 0.55 + reflexoGelo * 0.75, 0.0, 1.0);
       outgoingLight = mix(mix(vec3(0.93, 0.97, 1.0), CONTORNO_GELO, lado * 0.8), vec3(1.3), reflexoGelo);
       #include <opaque_fragment>`);
   };
@@ -454,9 +466,10 @@ function iniciar() {
     if (gotas.instanceColor) gotas.instanceColor.needsUpdate = true;
   }
 
-  // ---------- rodela de laranja de verdade, desenhada em código ----------
-  // casca com poros de óleo, parte branca, 10 gomos com gominhos de suco virados para o centro,
-  // películas brancas entre os gomos, miolo; relevo (bump) e brilho molhado; corte até o meio para encaixar na borda.
+  // ---------- meia rodela de laranja, feita em código ----------
+  // casca com poros de óleo, parte branca, gomos com gominhos de suco virados para o centro, películas e miolo;
+  // relevo (bump), brilho molhado e luz que atravessa a polpa (translucidez, como fruta de verdade contra a luz).
+  // É meia rodela (a laranja cortada no meio), em pé, com a borda da taça entrando no corte reto.
   const aleatorio = (() => { let n = 7; return () => ((n = (n * 16807) % 2147483647) - 1) / 2147483646; })();
   const TAM = 1024, M = TAM / 2;
   const corLar = document.createElement("canvas"), altLar = document.createElement("canvas");
@@ -535,35 +548,55 @@ function iniciar() {
     for (let k = 0; k < 1400; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,205,120" : "200,84,0"},${0.3 + aleatorio() * 0.4})`; x.beginPath(); x.arc(aleatorio() * 1024, aleatorio() * 64, 0.8 + aleatorio() * 1.8, 0, Math.PI * 2); x.fill(); }
     return texDe(c, true);
   })();
+  // face do corte reto: a polpa vista de lado, com os gominhos esticados
+  const corteLado = (() => {
+    const c = document.createElement("canvas"); c.width = 512; c.height = 32;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, 512, 0);
+    g.addColorStop(0, "#e06800"); g.addColorStop(0.03, "#fff1da"); g.addColorStop(0.07, "#ff9d1e"); g.addColorStop(0.5, "#ffc04d");
+    g.addColorStop(0.93, "#ff9d1e"); g.addColorStop(0.97, "#fff1da"); g.addColorStop(1, "#e06800");
+    x.fillStyle = g; x.fillRect(0, 0, 512, 32);
+    for (let k = 0; k < 260; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,236,180" : "230,100,0"},${0.25 + aleatorio() * 0.3})`; x.fillRect(20 + aleatorio() * 472, aleatorio() * 32, 1 + aleatorio() * 2, 6 + aleatorio() * 14); }
+    return texDe(c, true);
+  })();
+  // luz que atravessa a polpa: brilha quando há luz atrás da fruta (aproximação de translucidez usada em jogos)
+  const uLuzAtras = { value: new THREE.Vector3(0, 0, -1) };
+  const translucida = (m, forca) => {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uLuzAtras = uLuzAtras;
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform vec3 uLuzAtras;")
+        .replace("#include <opaque_fragment>", `
+          vec3 vOlho = normalize(vViewPosition);
+          vec3 vLuz = normalize(uLuzAtras + normal * 0.35);
+          float atravessa = pow(clamp(dot(vOlho, -vLuz), 0.0, 1.0), 2.5) * ${forca.toFixed(2)};
+          outgoingLight += diffuseColor.rgb * vec3(1.0, 0.62, 0.25) * atravessa;
+          #include <opaque_fragment>`);
+    };
+  };
   const polpaMat = new THREE.MeshPhysicalMaterial({
     map: texDe(corLar, true), bumpMap: texDe(altLar), bumpScale: 1.1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.06,
-    sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#ff5a00"), emissiveIntensity: 0.12, envMapIntensity: 0.6,
+    sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#ff5a00"), emissiveIntensity: 0.05, envMapIntensity: 0.5,
   });
+  translucida(polpaMat, 0.7);
   const cascaMat = new THREE.MeshPhysicalMaterial({ map: cascaLado, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.25 });
-  const RL = 0.2;
-  // corte de um lado ao meio (onde a borda da taça entra)
-  const CORTE = 0.07;
-  const geoLaranja = new THREE.CylinderGeometry(RL, RL, 0.034, 128, 1, false, CORTE / 2, Math.PI * 2 - CORTE);
-  const laranja = new THREE.Group();
-  const rodela = new THREE.Mesh(geoLaranja, [cascaMat, polpaMat, polpaMat]);
-  // as duas faces do corte (polpa por dentro)
-  const faceCorte = new THREE.MeshPhysicalMaterial({ color: "#ff9d1e", roughness: 0.3, clearcoat: 1, side: THREE.DoubleSide });
-  for (const a of [CORTE / 2, -CORTE / 2]) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(RL, 0.034), faceCorte);
-    f.position.set(Math.sin(a) * RL / 2, 0, Math.cos(a) * RL / 2);
-    f.rotation.y = a + Math.PI / 2;
-    rodela.add(f);
-  }
-  // o corte (em +z da rodela) fica para baixo quando ela é virada em pé, e a borda da taça entra nele
-  laranja.add(rodela);
-  const ANG_LARANJA = 0.55;
-  const LARANJA_FIM = new THREE.Vector3(Math.cos(ANG_LARANJA) * (RBORDA + 0.004), H + RL * 0.08, Math.sin(ANG_LARANJA) * (RBORDA + 0.004));
-  laranja.rotation.order = "YXZ";
-  laranja.rotation.y = -ANG_LARANJA;
-  laranja.rotation.x = Math.PI / 2;
-  laranja.visible = false;
-  copo.add(laranja);
-  const molaLaranja = { y: LARANJA_FIM.y + 1.8, v: 0, gira: 0, vg: 0, bateu: false };
+  const corteMat = new THREE.MeshPhysicalMaterial({ map: corteLado, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.08, side: THREE.DoubleSide });
+  translucida(corteMat, 0.9);
+  const RL = 0.22, ESP_L = 0.04;
+  const fruta = new THREE.Group();
+  // meia rodela: só a metade de cima (z negativo vira "para cima" quando ela fica em pé); o corte reto fica embaixo
+  const meia = new THREE.Mesh(new THREE.CylinderGeometry(RL, RL, ESP_L, 96, 1, false, Math.PI / 2, Math.PI), [cascaMat, polpaMat, polpaMat]);
+  const faceReta = new THREE.Mesh(new THREE.PlaneGeometry(2 * RL, ESP_L), corteMat);
+  meia.add(faceReta);
+  fruta.add(meia);
+  const ANG_FRUTA = 0.55;
+  const FRUTA_FIM = new THREE.Vector3(Math.cos(ANG_FRUTA) * (RBORDA + 0.004), H - 0.035, Math.sin(ANG_FRUTA) * (RBORDA + 0.004));
+  fruta.rotation.order = "YXZ";
+  fruta.rotation.y = -ANG_FRUTA;
+  fruta.rotation.x = Math.PI / 2;
+  fruta.visible = false;
+  copo.add(fruta);
+  const molaFruta = { y: FRUTA_FIM.y + 1.8, v: 0, gira: 0, vg: 0, bateu: false };
 
   // ---------- canudo com guarda-chuva de papel ----------
   const enfeite = new THREE.Group();
@@ -674,6 +707,7 @@ function iniciar() {
 
   // ---------- fundo de festa: preto, com luzes neon passando atrás da taça e refletindo no balcão ----------
   const neon = [];
+  let reflexoBalcao = null;
   if (FUNDO === "festa") {
     cena.background = new THREE.Color("#050508");
     sombra.visible = false;
@@ -704,14 +738,15 @@ function iniciar() {
       neon.push({ m, tipo: "bolinha", fase: Math.random() * 6.28, vel: 0.15 + Math.random() * 0.35, x0: m.position.x, forca: 0.25 + Math.random() * 0.35 });
     }
     // luzes coloridas de verdade, que brilham no vidro, no gelo e na laranja
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const l = new THREE.PointLight(CORES[i], 0, 12, 1.4);
       cena.add(l);
       neon.push({ m: l, tipo: "luz", fase: i * 2.1, vel: 0.35 + i * 0.1 });
     }
     // balcão preto brilhante que reflete a taça e as luzes
     // o balcão termina um pouco atrás da taça: dali para trás é só o escuro da festa, com as luzes
-    const espelho = new Reflector(new THREE.PlaneGeometry(40, 8), { textureWidth: Math.min(1024, innerWidth), textureHeight: Math.min(1024, innerHeight), color: 0x5a5a62 });
+    const espelho = new Reflector(new THREE.PlaneGeometry(40, 8), { textureWidth: Math.min(1024, innerWidth * 0.75), textureHeight: Math.min(1024, innerHeight * 0.75), color: 0x5a5a62 });
+    reflexoBalcao = espelho;
     espelho.rotation.x = -Math.PI / 2; espelho.position.set(0, -0.001, 1.5);
     cena.add(espelho);
     const balcao = new THREE.Mesh(new THREE.PlaneGeometry(40, 8), new THREE.MeshBasicMaterial({ color: "#050508", transparent: true, opacity: 0.72 }));
@@ -736,18 +771,34 @@ function iniciar() {
     // a taça com o enfeite (2,3 de altura, 1,6 de largura) ocupa o meio da tela, entre o logo e o botão, em qualquer tamanho
     const tg = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const d = Math.max(5.2 / 2 / tg, 2.5 / 2 / (tg * camera.aspect));
-    camera.position.set(0, 1.12 + d * 0.1, d);
+    const ang = controle ? controle.getAzimuthalAngle() : 0;
+    camera.position.set(Math.sin(ang) * d, 1.12 + d * 0.1, Math.cos(ang) * d);
     camera.lookAt(0, 1.12, 0);
     camera.updateProjectionMatrix();
+    if (controle) { controle.target.set(0, 1.12, 0); controle.update(); }
   }
+  let controle = null;
   ajustar();
+  // girar a taça 360° arrastando o dedo (ou o mouse) para os lados, com embalo
+  controle = new OrbitControls(camera, renderer.domElement);
+  controle.target.set(0, 1.12, 0);
+  controle.enableZoom = false; controle.enablePan = false;
+  controle.enableDamping = true; controle.dampingFactor = 0.07; controle.rotateSpeed = 0.7;
+  const polar = controle.getPolarAngle();
+  controle.minPolarAngle = polar - 0.18; controle.maxPolarAngle = polar + 0.08;
+  controle.update();
+  renderer.domElement.style.touchAction = "pan-y"; // arrastar para cima/baixo continua rolando a página
+  renderer.domElement.style.cursor = "grab";
+  let mexendo = false;
+  controle.addEventListener("start", () => { mexendo = true; renderer.domElement.style.cursor = "grabbing"; });
+  controle.addEventListener("end", () => { mexendo = false; renderer.domElement.style.cursor = "grab"; });
   addEventListener("resize", ajustar);
 
   // ---------- a cena andando ----------
   const suave = (t) => t * t * (3 - 2 * t);
   const entre = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
   let nivel = A + 0.0005, vol = 0, nuvem = -10, nuvemForca = 0, fundoGroselha = A - 1;
-  let tempo = 0, ultimo = performance.now(), avisou = false;
+  let tempo = 0, ultimo = performance.now(), avisou = false, nivelDesenhado = nivel;
   refazerCorpo(nivel);
 
   function passo(dt) {
@@ -776,24 +827,25 @@ function iniciar() {
     }
     uSuco.uNuvem.value = nuvem; uSuco.uNuvemForca.value = nuvemForca; uSuco.uFundo.value = fundoGroselha; uSuco.uTempo.value = t;
 
-    ondas(nivel);
-    refazerCorpo(nivel);
+    const mexeu = ondas(nivel);
+    const subiu = nivel !== nivelDesenhado;
+    if (subiu) { refazerCorpo(nivel); nivelDesenhado = nivel; }
     tampa.visible = nivel > A + 0.006;
     corpo.visible = tampa.visible;
-    if (tampa.visible) atualizarTampa(nivel);
+    if (tampa.visible && (mexeu || subiu)) atualizarTampa(nivel);
     moverGotas(dt, nivel);
 
-    // laranja: cai e encaixa na borda com um quique amortecido
+    // meia laranja: cai e encaixa na borda com um quique amortecido
     if (t > 5.25) {
-      laranja.visible = true;
-      if (!molaLaranja.bateu) {
-        molaLaranja.v -= G * dt; molaLaranja.y += molaLaranja.v * dt;
-        if (molaLaranja.y <= LARANJA_FIM.y) { molaLaranja.y = LARANJA_FIM.y; molaLaranja.v *= -0.28; molaLaranja.vg = 2.4; if (Math.abs(molaLaranja.v) < 0.2) molaLaranja.bateu = true; }
-      } else { molaLaranja.v += (-(molaLaranja.y - LARANJA_FIM.y) * 140 - molaLaranja.v * 12) * dt; molaLaranja.y += molaLaranja.v * dt; }
-      molaLaranja.vg += (-molaLaranja.gira * 90 - molaLaranja.vg * 7) * dt;
-      molaLaranja.gira += molaLaranja.vg * dt;
-      laranja.position.set(LARANJA_FIM.x, molaLaranja.y, LARANJA_FIM.z);
-      laranja.rotation.z = molaLaranja.gira * 0.12;
+      fruta.visible = true;
+      if (!molaFruta.bateu) {
+        molaFruta.v -= G * dt; molaFruta.y += molaFruta.v * dt;
+        if (molaFruta.y <= FRUTA_FIM.y) { molaFruta.y = FRUTA_FIM.y; molaFruta.v *= -0.28; molaFruta.vg = 2.4; if (Math.abs(molaFruta.v) < 0.2) molaFruta.bateu = true; }
+      } else { molaFruta.v += (-(molaFruta.y - FRUTA_FIM.y) * 140 - molaFruta.v * 12) * dt; molaFruta.y += molaFruta.v * dt; }
+      molaFruta.vg += (-molaFruta.gira * 90 - molaFruta.vg * 7) * dt;
+      molaFruta.gira += molaFruta.vg * dt;
+      fruta.position.set(FRUTA_FIM.x, molaFruta.y, FRUTA_FIM.z);
+      fruta.rotation.z = molaFruta.gira * 0.12; // balança quando cai na borda
     }
     // canudo com guarda-chuva: cai, desce entre o gelo e se apoia nele
     if (t > 5.5) {
@@ -809,9 +861,31 @@ function iniciar() {
 
   if (parado) for (let i = 0; i < 720; i++) passo(1 / 60); // sem animação: já mostra o drink pronto
 
+  // prepara todos os materiais antes de começar (assim nada engasga quando o gelo, a laranja ou o canudo aparecem)
+  {
+    const escondidos = [];
+    cena.traverse((o) => { if (!o.visible) { escondidos.push(o); o.visible = true; } });
+    renderer.compile(cena, camera);
+    for (const o of escondidos) o.visible = false;
+  }
+  // medidor de fluidez: se a média dos quadros passar de ~22 ms, baixa a resolução (e, se precisar, tira o reflexo do balcão)
+  let somaQ = 0, nQ = 0;
+  function medir(ms) {
+    somaQ += ms; nQ++;
+    if (nQ < 40) return;
+    const media = somaQ / nQ; somaQ = 0; nQ = 0;
+    if (media > 22 && resolucao > 1) { resolucao = Math.max(1, resolucao - 0.25); renderer.setPixelRatio(resolucao); ajustar(); }
+    else if (media > 26 && reflexoBalcao && reflexoBalcao.visible) reflexoBalcao.visible = false;
+  }
+
   function quadro(agora) {
-    const dt = Math.min(1 / 30, (agora - ultimo) / 1000);
+    const ms = agora - ultimo;
+    const dt = Math.min(1 / 30, ms / 1000);
     ultimo = agora;
+    if (ms > 0 && ms < 200) medir(ms);
+    controle.update();
+    // luz de trás da laranja (atrás e acima da taça), levada para o espaço da câmera
+    uLuzAtras.value.set(1.0, 1.7, -4.4).normalize().transformDirection(camera.matrixWorldInverse);
     passo(dt);
     // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve
     copo.rotation.y = tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3);
