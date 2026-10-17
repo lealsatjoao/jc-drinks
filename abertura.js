@@ -202,7 +202,7 @@ function iniciar() {
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return t;
   })();
-  const LADO = 0.18, RAIO_GELO = LADO * 0.64;
+  const LADO = 0.16, RAIO_GELO = LADO * 0.84; // raio que cobre os cantos do cubo: o gelo nunca atravessa o vidro
   const cubos = [0, 1, 2, 3, 4].map((i) => {
     const m = new THREE.Mesh(new RoundedBoxGeometry(LADO, LADO * 0.94, LADO * 1.02, 4, 0.03), gelo);
     m.visible = false;
@@ -246,7 +246,7 @@ function iniciar() {
         }
       }
       for (let i = 0; i < ativos.length; i++) for (let j = i + 1; j < ativos.length; j++) {
-        const a = ativos[i], b = ativos[j], dx = b.p.clone().sub(a.p), l = dx.length(), min = RAIO_GELO * 1.86;
+        const a = ativos[i], b = ativos[j], dx = b.p.clone().sub(a.p), l = dx.length(), min = RAIO_GELO * 1.55;
         if (l < min && l > 1e-6) {
           dx.divideScalar(l);
           const fura = (min - l) / 2;
@@ -503,21 +503,28 @@ function iniciar() {
   // guarda-chuva preso no meio do canudo (o canudo passa pelo centro dele): papel em gomos, dobras e varetas
   const chapeu = new THREE.Mesh(
     (() => {
-      const g = new THREE.ConeGeometry(0.3, 0.11, 48, 4, true).toNonIndexed();
-      // dobras do papel: cada gomo afunda um pouco no meio, entre as varetas; cada gomo com uma cor
-      const p = g.attributes.position, cores = new Float32Array(p.count * 3);
-      const c1 = new THREE.Color("#c8322f"), c2 = new THREE.Color("#f2a03d"), borda = new THREE.Color("#fbe6c4");
-      for (let i = 0; i < p.count; i++) {
-        const x = p.getX(i), z = p.getZ(i), y = p.getY(i), ang = Math.atan2(z, x), r = Math.hypot(x, z);
-        p.setY(i, y - Math.pow(Math.abs(Math.sin(ang * 6)), 0.7) * 0.012 * (r / 0.3));
+      // 12 gomos fechados, cada um com a sua cor; o papel afunda um pouco no meio de cada gomo (dobra entre as varetas)
+      const R_GC = 0.3, ALT_GC = 0.11, GOMOS = 12, SUB = 8, ANEIS_GC = 6;
+      const c1 = new THREE.Color("#c8322f"), c2 = new THREE.Color("#f2a03d");
+      const vs = [], cs = [], idx = [];
+      for (let gm = 0; gm < GOMOS; gm++) {
+        const base = vs.length / 3, cor = gm % 2 ? c1 : c2;
+        for (let j = 0; j <= ANEIS_GC; j++) for (let i = 0; i <= SUB; i++) {
+          const f = i / SUB, ang = ((gm + f) / GOMOS) * Math.PI * 2, r = (R_GC * j) / ANEIS_GC;
+          const dobra = Math.sin(f * Math.PI) * 0.012 * (r / R_GC);
+          vs.push(Math.cos(ang) * r, ALT_GC * (1 - j / ANEIS_GC) - dobra, Math.sin(ang) * r);
+          cs.push(cor.r, cor.g, cor.b);
+        }
+        for (let j = 0; j < ANEIS_GC; j++) for (let i = 0; i < SUB; i++) {
+          const a = base + j * (SUB + 1) + i, b = a + 1, c = a + SUB + 1, d = c + 1;
+          idx.push(a, c, b, b, c, d);
+        }
       }
-      for (let t = 0; t < p.count; t += 3) {
-        const cx = (p.getX(t) + p.getX(t + 1) + p.getX(t + 2)) / 3, cz = (p.getZ(t) + p.getZ(t + 1) + p.getZ(t + 2)) / 3;
-        const gomo = Math.floor(((Math.atan2(cz, cx) + Math.PI) / (Math.PI * 2)) * 12) % 12;
-        const cor = Math.hypot(cx, cz) > 0.27 ? borda : gomo % 2 ? c1 : c2;
-        for (let k = 0; k < 3; k++) cor.toArray(cores, (t + k) * 3);
-      }
-      g.setAttribute("color", new THREE.BufferAttribute(cores, 3));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(vs, 3));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(cs, 3));
+      g.setIndex(idx);
+      g.translate(0, -ALT_GC / 2, 0);
       g.computeVertexNormals();
       return g;
     })(),
@@ -529,6 +536,10 @@ function iniciar() {
   const guarda = new THREE.Group();
   anel.position.y = -0.005;
   chapeu.position.y = 0.05;
+  // por baixo, o papel é mais claro (como guarda-chuva de verdade) e fecha a cobertura
+  const forro = new THREE.Mesh(chapeu.geometry, new THREE.MeshPhysicalMaterial({ color: "#f6dcc0", roughness: 0.85, side: THREE.DoubleSide }));
+  forro.position.y = -0.004;
+  chapeu.add(forro);
   guarda.add(chapeu, anel);
   for (let i = 0; i < 12; i++) {
     const vareta = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 0.23, 6), madeira);
