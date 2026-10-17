@@ -381,3 +381,14 @@ a.botao { display: inline-block; text-align: center; text-decoration: none; padd
 .carta h3 small { display: block; margin: 4px 0 0; vertical-align: baseline; }
 .abertura .logo { width: min(170px, 46vw); }
 .abertura-texto { top: 7svh; }
+
+/* ---------- efeitos de texto (inspirados no Magic UI) ---------- */
+.anima .palavras .palavra { display: inline-block; opacity: 0; filter: blur(8px); transform: translateY(.35em); transition: opacity .7s ease, filter .7s ease, transform .8s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i) * 55ms + .1s); }
+.anima .visto .palavras .palavra, .anima .palavras.visto .palavra { opacity: 1; filter: none; transform: none; }
+.troca { display: inline-block; color: var(--ouro-escuro); transition: opacity .38s ease, filter .38s ease, transform .38s cubic-bezier(.2,.7,.2,1); }
+.troca.sai { opacity: 0; filter: blur(6px); transform: translateY(-.5em); }
+.troca.entra { opacity: 0; filter: blur(6px); transform: translateY(.5em); transition: none; }
+.brilho { background: linear-gradient(100deg, currentColor 0 40%, #c69849 50%, currentColor 60% 100%) 0 0 / 250% 100% no-repeat; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: brilho 5.5s ease-in-out infinite 2s; }
+.chamada:hover .brilho, .chamada:focus-visible .brilho { -webkit-text-fill-color: currentColor; background: none; }
+@keyframes brilho { 0%, 55% { background-position: 100% 0; } 85%, 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .brilho { animation: none; -webkit-text-fill-color: currentColor; background: none; } .troca { transition: none; } }
