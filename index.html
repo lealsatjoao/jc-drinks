@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>JC Drinks · Bar de drinks para a sua festa</title>
   <meta name="description" content="Bar de drinks para casamentos, aniversários, 15 anos e eventos de empresa em Jacareí, São José dos Campos e região. Monte a carta da sua festa e peça o orçamento.">
-  <meta name="theme-color" content="#f7f5f1">
+  <meta name="theme-color" content="#050508">
   <meta property="og:title" content="JC Drinks · Bar de drinks para a sua festa">
   <meta property="og:description" content="Monte a carta da sua festa e peça o orçamento pelo WhatsApp.">
   <meta property="og:image" content="img/capa.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Jost:wght@300;400;500;600&display=swap">
-  <link rel="stylesheet" href="estilo.css?v=1792294000">
+  <link rel="stylesheet" href="estilo.css?v=1792295000">
 </head>
 <body class="inicio">
-  <script>document.documentElement.classList.add("anima")</script>
+  <script>document.documentElement.classList.add("anima"); document.documentElement.dataset.fundo = new URLSearchParams(location.search).get("fundo") || "festa";</script>
 
   <!-- Abertura: tela clara, o copo 3D se monta e enche; no fim o logo aparece em cima -->
   <header class="abertura">
@@ -123,9 +123,9 @@
       <p><a href="https://www.instagram.com/jc_drinksoficial/" target="_blank" rel="noopener">@jc_drinksoficial</a></p>
     </footer>
   </main>
-  <script src="inicio.js?v=1792294000"></script>
+  <script src="inicio.js?v=1792295000"></script>
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/" } }</script>
-  <script type="module" src="abertura.js?v=1792294000"></script>
+  <script type="module" src="abertura.js?v=1792295000"></script>
   <script>
     // rede de segurança: se o 3D não carregar, mostra a foto e o logo mesmo assim
     setTimeout(() => { const d = document.documentElement; if (!d.classList.contains("abertura-pronta")) { if (!document.querySelector("#palco canvas")) d.classList.add("sem-3d"); d.classList.add("abertura-pronta"); } }, 9000);

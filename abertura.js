@@ -16,9 +16,9 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 const palco = document.getElementById("palco");
 const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pronto = () => document.documentElement.classList.add("abertura-pronta");
-// fundo da abertura: branco (padrão) ou "festa" (preto com luzes neon passando)
-const FUNDO = new URLSearchParams(location.search).get("fundo") || "";
-if (FUNDO) document.documentElement.dataset.fundo = FUNDO;
+// fundo da abertura: "festa" (padrão: preto com luzes neon passando) ou "branco" (?fundo=branco)
+const FUNDO = new URLSearchParams(location.search).get("fundo") || "festa";
+document.documentElement.dataset.fundo = FUNDO;
 
 try {
   iniciar();
@@ -466,16 +466,16 @@ function iniciar() {
     const R = M, R_CASCA = R * 0.935, R_BRANCO = R * 0.9, R_GOMO = R * 0.89, GOMOS = 10;
     // casca
     let g = c.createRadialGradient(M, M, R_CASCA, M, M, R);
-    g.addColorStop(0, "#f7a23b"); g.addColorStop(0.5, "#e9800f"); g.addColorStop(1, "#c25f05");
+    g.addColorStop(0, "#ffa531"); g.addColorStop(0.5, "#ff8a12"); g.addColorStop(1, "#e86c00");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#9a9a9a"; h.beginPath(); h.arc(M, M, R, 0, Math.PI * 2); h.fill();
     // parte branca (mesocarpo), meio translúcida, com um verde claro perto da casca
     g = c.createRadialGradient(M, M, R_GOMO, M, M, R_CASCA);
-    g.addColorStop(0, "#fde6bd"); g.addColorStop(0.6, "#fbdca8"); g.addColorStop(1, "#f6b05a");
+    g.addColorStop(0, "#fff6e6"); g.addColorStop(0.6, "#fff1da"); g.addColorStop(1, "#ffd08a");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R_CASCA, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#bdbdbd"; h.beginPath(); h.arc(M, M, R_CASCA, 0, Math.PI * 2); h.fill();
     // fundo dos gomos (vira a película entre eles)
-    c.fillStyle = "#f4c27c"; c.beginPath(); c.arc(M, M, R_GOMO, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#fff0d2"; c.beginPath(); c.arc(M, M, R_GOMO, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#d0d0d0"; h.beginPath(); h.arc(M, M, R_GOMO, 0, Math.PI * 2); h.fill();
     for (let i = 0; i < GOMOS; i++) {
       const larg = (Math.PI * 2) / GOMOS, a0 = i * larg + 0.014 + (aleatorio() - 0.5) * 0.01, a1 = (i + 1) * larg - 0.014;
@@ -489,7 +489,7 @@ function iniciar() {
       };
       // polpa: verde-amarelado, mais claro e translúcido no centro
       g = c.createRadialGradient(M, M, r0, M, M, R_GOMO);
-      g.addColorStop(0, "#ffb547"); g.addColorStop(0.45, "#f7891c"); g.addColorStop(1, "#e06a06");
+      g.addColorStop(0, "#ffc04d"); g.addColorStop(0.45, "#ff9d1e"); g.addColorStop(1, "#ff8205");
       c.save(); gomo(c); c.fillStyle = g; c.fill(); c.clip();
       h.save(); gomo(h); h.fillStyle = "#6a6a6a"; h.fill(); h.clip();
       // gominhos de suco (vesículas): gotas compridas apontando para o centro
@@ -497,7 +497,7 @@ function iniciar() {
         const a = a0 + aleatorio() * (a1 - a0), rr = r0 + 10 + Math.pow(aleatorio(), 0.8) * (R_GOMO - r0 - 20);
         const x = M + Math.cos(a) * rr, y = M + Math.sin(a) * rr;
         const comp = 7 + (rr / R) * 26 * (0.6 + aleatorio() * 0.6), lar = 2.2 + (rr / R) * 5 * (0.6 + aleatorio() * 0.6);
-        c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,214,140" : "222,112,12"},${0.25 + aleatorio() * 0.35})`;
+        c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,222,150" : "255,120,0"},${0.25 + aleatorio() * 0.35})`;
         c.beginPath(); c.ellipse(x, y, comp, lar, a, 0, Math.PI * 2); c.fill();
         c.fillStyle = `rgba(255,246,218,${0.25 + aleatorio() * 0.4})`;
         c.beginPath(); c.ellipse(x - Math.cos(a) * comp * 0.3, y - Math.sin(a) * comp * 0.3, comp * 0.35, lar * 0.35, a, 0, Math.PI * 2); c.fill();
@@ -515,13 +515,13 @@ function iniciar() {
     }
     // miolo
     g = c.createRadialGradient(M, M, 0, M, M, R * 0.085);
-    g.addColorStop(0, "#fff6e4"); g.addColorStop(1, "#f7dcb0");
+    g.addColorStop(0, "#fffaf0"); g.addColorStop(1, "#ffe7bf");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R * 0.085, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#e0e0e0"; h.beginPath(); h.arc(M, M, R * 0.085, 0, Math.PI * 2); h.fill();
     // poros de óleo na casca
     for (let k = 0; k < 900; k++) {
       const a = aleatorio() * Math.PI * 2, rr = R_CASCA + 4 + aleatorio() * (R - R_CASCA - 8);
-      c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,192,95" : "188,84,4"},${0.3 + aleatorio() * 0.4})`;
+      c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,200,110" : "214,92,0"},${0.3 + aleatorio() * 0.4})`;
       c.beginPath(); c.arc(M + Math.cos(a) * rr, M + Math.sin(a) * rr, 1 + aleatorio() * 2, 0, Math.PI * 2); c.fill();
     }
   })();
@@ -530,14 +530,14 @@ function iniciar() {
   const cascaLado = (() => {
     const c = document.createElement("canvas"); c.width = 1024; c.height = 64;
     const x = c.getContext("2d");
-    const g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, "#c4600a"); g.addColorStop(0.5, "#ee8a1c"); g.addColorStop(1, "#c4600a");
+    const g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, "#e06800"); g.addColorStop(0.5, "#ff9420"); g.addColorStop(1, "#e06800");
     x.fillStyle = g; x.fillRect(0, 0, 1024, 64);
-    for (let k = 0; k < 1400; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,200,110" : "170,70,4"},${0.3 + aleatorio() * 0.4})`; x.beginPath(); x.arc(aleatorio() * 1024, aleatorio() * 64, 0.8 + aleatorio() * 1.8, 0, Math.PI * 2); x.fill(); }
+    for (let k = 0; k < 1400; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,205,120" : "200,84,0"},${0.3 + aleatorio() * 0.4})`; x.beginPath(); x.arc(aleatorio() * 1024, aleatorio() * 64, 0.8 + aleatorio() * 1.8, 0, Math.PI * 2); x.fill(); }
     return texDe(c, true);
   })();
   const polpaMat = new THREE.MeshPhysicalMaterial({
-    map: texDe(corLar, true), bumpMap: texDe(altLar), bumpScale: 2.2, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.12,
-    sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#8a3400"), emissiveIntensity: 0.4,
+    map: texDe(corLar, true), bumpMap: texDe(altLar), bumpScale: 1.1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.06,
+    sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#ff5a00"), emissiveIntensity: 0.12, envMapIntensity: 0.6,
   });
   const cascaMat = new THREE.MeshPhysicalMaterial({ map: cascaLado, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.25 });
   const RL = 0.2;
@@ -547,7 +547,7 @@ function iniciar() {
   const laranja = new THREE.Group();
   const rodela = new THREE.Mesh(geoLaranja, [cascaMat, polpaMat, polpaMat]);
   // as duas faces do corte (polpa por dentro)
-  const faceCorte = new THREE.MeshPhysicalMaterial({ color: "#f6a33e", roughness: 0.3, clearcoat: 1, side: THREE.DoubleSide });
+  const faceCorte = new THREE.MeshPhysicalMaterial({ color: "#ff9d1e", roughness: 0.3, clearcoat: 1, side: THREE.DoubleSide });
   for (const a of [CORTE / 2, -CORTE / 2]) {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(RL, 0.034), faceCorte);
     f.position.set(Math.sin(a) * RL / 2, 0, Math.cos(a) * RL / 2);
@@ -724,7 +724,7 @@ function iniciar() {
     for (const n of neon) {
       if (n.tipo === "feixe") { n.m.rotation.z = n.base + Math.sin(t * n.vel + n.fase) * 0.55; n.m.material.opacity = acende * n.forca * (0.6 + 0.4 * Math.sin(t * 0.7 + n.fase)); }
       else if (n.tipo === "bolinha") { n.m.position.x = n.x0 + Math.sin(t * n.vel * 0.5 + n.fase) * 1.6; n.m.material.opacity = acende * n.forca * (0.5 + 0.5 * Math.sin(t * n.vel + n.fase)); }
-      else { const a = t * n.vel + n.fase; n.m.position.set(Math.cos(a) * 2.6, 1.6 + Math.sin(a * 1.3) * 0.8, Math.sin(a) * 2.2 - 0.6); n.m.intensity = acende * 6; }
+      else { const a = t * n.vel + n.fase; n.m.position.set(Math.cos(a) * 2.6, 1.6 + Math.sin(a * 1.3) * 0.8, Math.sin(a) * 2.2 - 0.6); n.m.intensity = acende * 2.5; }
     }
   }
 
@@ -756,7 +756,7 @@ function iniciar() {
 
     const surge = suave(entre(t, 0, 0.8));
     copo.position.y = (1 - surge) * 0.35;
-    renderer.toneMappingExposure = 2.4 - 1.4 * surge;   // sai do branco, como foto revelando
+    renderer.toneMappingExposure = (2.4 - 1.4 * surge) * (FUNDO === "festa" ? 0.82 : 1);   // sai do branco, como foto revelando
     sombra.material.opacity = surge;
 
     moverGelo(dt, t, nivel);
