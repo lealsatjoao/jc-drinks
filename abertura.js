@@ -221,7 +221,7 @@ function iniciar() {
   let agitacao = 1;
   function ondas(nivel) {
     if (agitacao < 1e-5) return false; // suco parado: não precisa calcular nada
-    const c2 = 0.3, amort = 0.984, novo = hAntes;
+    const c2 = 0.3, amort = 0.976, novo = hAntes;
     for (let z = 1; z < N - 1; z++) for (let x = 1; x < N - 1; x++) {
       const i = z * N + x;
       const lap = hAtual[i - 1] + hAtual[i + 1] + hAtual[i - N] + hAtual[i + N] - 4 * hAtual[i];
@@ -849,13 +849,14 @@ function iniciar() {
   const tela = renderer.domElement;
   tela.style.touchAction = "pan-y"; // arrastar para cima/baixo continua rolando a página
   tela.style.cursor = "grab";
-  let giro = 0, velGiro = 0, arrastando = false, xAntes = 0, tAntes = 0, velRotAntes = 0;
+  let giro = 0, velGiro = 0, arrastando = false, xAntes = 0, tAntes = 0, velRotAntes = 0, esperaOnda = 0;
   tela.addEventListener("pointerdown", (e) => { arrastando = true; xAntes = e.clientX; tAntes = performance.now(); velGiro = 0; tela.setPointerCapture(e.pointerId); tela.style.cursor = "grabbing"; });
   tela.addEventListener("pointermove", (e) => {
     if (!arrastando) return;
-    const agora = performance.now(), d = ((e.clientX - xAntes) / Math.max(320, tela.clientWidth)) * Math.PI * 2.2;
+    // giro leve: o dedo mexe a taça devagar, e a velocidade tem limite (nada de girar rápido)
+    const agora = performance.now(), d = ((e.clientX - xAntes) / Math.max(320, tela.clientWidth)) * Math.PI * 1.1;
     giro += d;
-    velGiro = d / Math.max(0.008, (agora - tAntes) / 1000);
+    velGiro = Math.max(-2.2, Math.min(2.2, d / Math.max(0.008, (agora - tAntes) / 1000)));
     xAntes = e.clientX; tAntes = agora;
   });
   const soltar = () => { arrastando = false; tela.style.cursor = "grab"; };
@@ -1037,8 +1038,9 @@ function iniciar() {
     // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve; por cima, o giro do dedo (com embalo)
     // ao soltar: o embalo continua e uma "mola" leva a taça, sem tranco, até a frente mais próxima (JC Drinks aparecendo)
     if (!arrastando) {
-      const volta = Math.PI * 2, alvo = Math.round((giro + velGiro * 0.45) / volta) * volta;
-      velGiro += ((alvo - giro) * 9 - velGiro * 5.2) * dt;
+      const volta = Math.PI * 2, alvo = Math.round((giro + velGiro * 0.35) / volta) * volta;
+      velGiro += ((alvo - giro) * 6 - velGiro * 4.6) * dt;
+      velGiro = Math.max(-2.2, Math.min(2.2, velGiro));
       giro += velGiro * dt;
     }
     const rotAntes = copo.rotation.y;
@@ -1047,11 +1049,14 @@ function iniciar() {
     if (dt > 0 && !quebrada) {
       const velRot = (copo.rotation.y - rotAntes) / dt, tranco = velRot - velRotAntes;
       velRotAntes = velRot;
-      giroSuco = giroSuco * Math.exp(-1.4 * dt) - tranco * 0.55;
-      const forca = Math.min(0.03, Math.abs(tranco) * 0.004 + Math.abs(giroSuco) * 0.0015);
-      if (forca > 0.0006 && tampa.visible) {
-        const r = rDentro(nivel) * 0.78;
-        for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + tempo; empurrar(Math.cos(a) * r, Math.sin(a) * r, forca * (i % 2 ? 1 : -1)); }
+      giroSuco = giroSuco * Math.exp(-1.8 * dt) - tranco * 0.35;
+      // ondinha sutil: só um empurrão leve no lado que "bate" no vidro, no máximo umas 6 vezes por segundo
+      esperaOnda -= dt;
+      const forca = Math.min(0.0035, Math.abs(tranco) * 0.0009);
+      if (forca > 0.0008 && tampa.visible && esperaOnda <= 0) {
+        esperaOnda = 0.16;
+        const r = rDentro(nivel) * 0.7, a = Math.sign(tranco) > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
+        empurrar(Math.cos(a) * r, Math.sin(a) * r, forca);
       }
     }
     if (neon.length) mexerNeon(tempo);
