@@ -392,3 +392,12 @@ a.botao { display: inline-block; text-align: center; text-decoration: none; padd
 .chamada:hover .brilho, .chamada:focus-visible .brilho { -webkit-text-fill-color: currentColor; background: none; }
 @keyframes brilho { 0%, 55% { background-position: 100% 0; } 85%, 100% { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .brilho { animation: none; -webkit-text-fill-color: currentColor; background: none; } .troca { transition: none; } }
+
+/* ---------- abertura com fundo de festa (preto com luzes neon) ---------- */
+[data-fundo="festa"] .abertura { background: #050508; }
+[data-fundo="festa"] .abertura .topo-link { color: #ece6da; border-color: rgba(236,230,218,.4); }
+[data-fundo="festa"] .abertura-frase { color: #b9b2a5; }
+[data-fundo="festa"] .abertura-pe .chamada { background: rgba(5,5,8,.55); color: #f3ede2; border-color: rgba(243,237,226,.75); }
+[data-fundo="festa"] .abertura-pe .chamada::before { background: #f3ede2; }
+[data-fundo="festa"] .abertura-pe .chamada:hover, [data-fundo="festa"] .abertura-pe .chamada:focus-visible { color: #050508; }
+[data-fundo="festa"] .abertura-pe .link-fino { color: #b9b2a5; border-color: rgba(185,178,165,.4); }

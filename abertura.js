@@ -11,10 +11,14 @@
 import * as THREE from "three";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { Reflector } from "three/addons/objects/Reflector.js";
 
 const palco = document.getElementById("palco");
 const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pronto = () => document.documentElement.classList.add("abertura-pronta");
+// fundo da abertura: branco (padrão) ou "festa" (preto com luzes neon passando)
+const FUNDO = new URLSearchParams(location.search).get("fundo") || "";
+if (FUNDO) document.documentElement.dataset.fundo = FUNDO;
 
 try {
   iniciar();
@@ -71,12 +75,13 @@ function iniciar() {
     clearcoat: 1, clearcoatRoughness: 0, specularIntensity: 1, ior: 1.6, envMapIntensity: 1.7, side: THREE.DoubleSide,
   });
   cristal.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", `
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+      #define CONTORNO_VIDRO ${FUNDO === "festa" ? "vec3(0.78, 0.8, 0.86)" : "vec3(0.16, 0.15, 0.14)"}`).replace("#include <opaque_fragment>", `
       float borda = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 3.0);
       float brilho = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
       float reflexo = smoothstep(0.7, 1.4, brilho);
       diffuseColor.a = clamp(borda * 0.7 + reflexo * 0.7, 0.0, 1.0);
-      outgoingLight = mix(mix(vec3(1.0), vec3(0.16, 0.15, 0.14), borda * 0.9), vec3(1.25), reflexo);
+      outgoingLight = mix(mix(vec3(1.0), CONTORNO_VIDRO, borda * 0.9), vec3(1.25), reflexo);
       #include <opaque_fragment>`);
   };
   const vidro = new THREE.Mesh(new THREE.LatheGeometry(perfil, 192), cristal);
@@ -251,12 +256,13 @@ function iniciar() {
   gelo.normalScale = new THREE.Vector2(0.6, 0.6);
   // quinas e faces de lado ficam escuras e azuladas (luz que reflete por dentro), como gelo de verdade em fundo branco
   gelo.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", `
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+      #define CONTORNO_GELO ${FUNDO === "festa" ? "vec3(0.75, 0.86, 0.95)" : "vec3(0.3, 0.4, 0.48)"}`).replace("#include <opaque_fragment>", `
       float lado = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0);
       float luzGelo = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
       float reflexoGelo = smoothstep(0.9, 1.6, luzGelo);
       diffuseColor.a = clamp(0.1 + lado * 0.55 + reflexoGelo * 0.75, 0.0, 1.0);
-      outgoingLight = mix(mix(vec3(0.93, 0.97, 1.0), vec3(0.3, 0.4, 0.48), lado * 0.8), vec3(1.3), reflexoGelo);
+      outgoingLight = mix(mix(vec3(0.93, 0.97, 1.0), CONTORNO_GELO, lado * 0.8), vec3(1.3), reflexoGelo);
       #include <opaque_fragment>`);
   };
   // miolo branco e nublado (água que congelou por último) e bolhinhas presas
@@ -666,6 +672,62 @@ function iniciar() {
   })();
   cena.add(sombra);
 
+  // ---------- fundo de festa: preto, com luzes neon passando atrás da taça e refletindo no balcão ----------
+  const neon = [];
+  if (FUNDO === "festa") {
+    cena.background = new THREE.Color("#050508");
+    sombra.visible = false;
+    // brilho macio (gaussiano) para os feixes e as bolinhas de luz desfocadas
+    const brilhoTex = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 128;
+      const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.25, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,0)");
+      x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    })();
+    const CORES = ["#ff2bd6", "#22e4ff", "#ffb43a", "#8a5cff", "#ff3b6b"];
+    // feixes de luz compridos que varrem devagar, como luz de pista
+    for (let i = 0; i < 7; i++) {
+      const cor = new THREE.Color(CORES[i % CORES.length]);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 16), new THREE.MeshBasicMaterial({ map: brilhoTex, color: cor, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      m.position.set(-6 + i * 2, 2, -6 - (i % 3));
+      cena.add(m);
+      neon.push({ m, tipo: "feixe", fase: Math.random() * 6.28, vel: 0.12 + Math.random() * 0.12, base: -0.9 + Math.random() * 1.8, forca: 0.35 + Math.random() * 0.25 });
+    }
+    // bolinhas de luz desfocadas (bokeh) passando ao fundo
+    for (let i = 0; i < 22; i++) {
+      const cor = new THREE.Color(CORES[i % CORES.length]);
+      const tam = 0.3 + Math.random() * 0.9;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(tam, tam), new THREE.MeshBasicMaterial({ map: brilhoTex, color: cor, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      m.position.set((Math.random() - 0.5) * 16, -0.5 + Math.random() * 6, -4 - Math.random() * 5);
+      cena.add(m);
+      neon.push({ m, tipo: "bolinha", fase: Math.random() * 6.28, vel: 0.15 + Math.random() * 0.35, x0: m.position.x, forca: 0.25 + Math.random() * 0.35 });
+    }
+    // luzes coloridas de verdade, que brilham no vidro, no gelo e na laranja
+    for (let i = 0; i < 3; i++) {
+      const l = new THREE.PointLight(CORES[i], 0, 12, 1.4);
+      cena.add(l);
+      neon.push({ m: l, tipo: "luz", fase: i * 2.1, vel: 0.35 + i * 0.1 });
+    }
+    // balcão preto brilhante que reflete a taça e as luzes
+    // o balcão termina um pouco atrás da taça: dali para trás é só o escuro da festa, com as luzes
+    const espelho = new Reflector(new THREE.PlaneGeometry(40, 8), { textureWidth: Math.min(1024, innerWidth), textureHeight: Math.min(1024, innerHeight), color: 0x5a5a62 });
+    espelho.rotation.x = -Math.PI / 2; espelho.position.set(0, -0.001, 1.5);
+    cena.add(espelho);
+    const balcao = new THREE.Mesh(new THREE.PlaneGeometry(40, 8), new THREE.MeshBasicMaterial({ color: "#050508", transparent: true, opacity: 0.72 }));
+    balcao.rotation.x = -Math.PI / 2; balcao.position.set(0, 0.0005, 1.5);
+    cena.add(balcao);
+    // no escuro, o contorno do cristal e do gelo é claro (reflexo), não escuro
+  }
+  function mexerNeon(t) {
+    const acende = Math.min(1, Math.max(0, (t - 0.3) / 1.5));
+    for (const n of neon) {
+      if (n.tipo === "feixe") { n.m.rotation.z = n.base + Math.sin(t * n.vel + n.fase) * 0.55; n.m.material.opacity = acende * n.forca * (0.6 + 0.4 * Math.sin(t * 0.7 + n.fase)); }
+      else if (n.tipo === "bolinha") { n.m.position.x = n.x0 + Math.sin(t * n.vel * 0.5 + n.fase) * 1.6; n.m.material.opacity = acende * n.forca * (0.5 + 0.5 * Math.sin(t * n.vel + n.fase)); }
+      else { const a = t * n.vel + n.fase; n.m.position.set(Math.cos(a) * 2.6, 1.6 + Math.sin(a * 1.3) * 0.8, Math.sin(a) * 2.2 - 0.6); n.m.intensity = acende * 6; }
+    }
+  }
+
   // ---------- câmera ----------
   function ajustar() {
     const w = palco.clientWidth, h = palco.clientHeight;
@@ -753,6 +815,7 @@ function iniciar() {
     passo(dt);
     // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve
     copo.rotation.y = tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3);
+    if (neon.length) mexerNeon(tempo);
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
   }
