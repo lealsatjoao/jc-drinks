@@ -828,7 +828,8 @@ function iniciar() {
     // sombras de pessoas dançando no fundo (só a silhueta, em contraluz), no ritmo da música
     const sombraMat = new THREE.MeshBasicMaterial({ color: "#040308", transparent: true, opacity: 0.88 });
     const capsula = (r, l) => new THREE.Mesh(new THREE.CapsuleGeometry(r, l, 4, 10), sombraMat);
-    for (let i = 0; i < 11; i++) {
+    // (bonecos desligados: o João achou artificial; trocar por silhueta de gente de verdade)
+    for (let i = 0; i < 0; i++) {
       const p = new THREE.Group(), alt = sorteio(1.05, 1.4);
       const tronco = capsula(0.17, 0.5); tronco.position.y = 1.2;
       const cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), sombraMat); cabeca.position.y = 1.72;
