@@ -65,6 +65,8 @@ function iniciar() {
 
   const copo = new THREE.Group();
   cena.add(copo);
+  let quebrada = false, tQuebra = 0, giroSuco = 0; // taça quebrada (toque duplo) e o giro atrasado do suco
+  const poca = { alvo: 0, r: 0 };
 
   // ---------- taça de cristal em V: pé, haste fina e bojo em cone ----------
   const A = 1.07;                 // ponta de dentro do cone (onde o suco começa)
@@ -290,7 +292,7 @@ function iniciar() {
   const miolo = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 1, transparent: true, opacity: 0.16, depthWrite: false });
   const bolha = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.2, transparent: true, opacity: 0.55, depthWrite: false });
   const LADO = 0.16, RAIO_GELO = LADO * 0.84; // raio que cobre os cantos do cubo: o gelo nunca atravessa o vidro
-  const cubos = [0, 1, 2, 3, 4].map((i) => {
+  const cubos = [0, 1, 2].map((i) => {
     const m = new THREE.Mesh(new RoundedBoxGeometry(LADO, LADO * 0.94, LADO * 1.02, 4, 0.025), gelo);
     const nuvemGelo = new THREE.Mesh(new RoundedBoxGeometry(LADO * 0.5, LADO * 0.42, LADO * 0.46, 2, 0.04), miolo);
     nuvemGelo.rotation.set(0.3 * i, 0.5, 0.2);
@@ -304,8 +306,9 @@ function iniciar() {
     copo.add(m);
     const ang = i * 2.2 + 0.4;
     return {
-      m, cai: 0.95 + i * 0.22,
+      m, cai: 0.95 + i * 0.3,
       p: new THREE.Vector3(Math.cos(ang) * 0.06, 4.6 + i * 0.3, Math.sin(ang) * 0.06), v: new THREE.Vector3(0, -0.4, 0),
+      p0: new THREE.Vector3(Math.cos(ang) * 0.06, 4.6 + i * 0.3, Math.sin(ang) * 0.06),
       giro: new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6),
       tocouSuco: false,
     };
@@ -317,14 +320,22 @@ function iniciar() {
       c.m.visible = true;
       // dentro do suco: empuxo (o gelo é mais leve que o suco) e o suco freia o movimento
       const fundo = Math.min(1, Math.max(0, (nivel - (c.p.y - RAIO_GELO)) / (2 * RAIO_GELO)));
-      c.v.y += (-G + G * fundo * 1.2) * dt; // boia com uma ponta para fora
+      if (quebrada) { c.v.y -= G * dt; c.p.addScaledVector(c.v, dt); if (c.p.y < LADO * 0.5) { c.p.y = LADO * 0.5; c.v.y *= -0.3; c.v.x *= 0.7; c.v.z *= 0.7; c.giro.multiplyScalar(0.6); } continue; }
+      c.v.y += (-G + G * fundo * 1.12) * dt; // boia quase todo afundado: só um pedacinho para fora
       if (fundo > 0) { c.v.multiplyScalar(1 - Math.min(1, 3.5 * fundo * dt)); c.giro.multiplyScalar(1 - Math.min(1, 4 * fundo * dt)); }
       if (fundo > 0.05 && !c.tocouSuco) { c.tocouSuco = true; empurrar(c.p.x, c.p.z, 0.05); }
       if (fundo > 0) { c.p.x *= 1 - dt * 0.3; c.p.z *= 1 - dt * 0.3; }
       c.p.addScaledVector(c.v, dt);
     }
+    // o suco gira um pouco atrasado quando a taça gira, e leva o gelo junto
+    if (!quebrada && Math.abs(giroSuco) > 1e-4) for (const c of ativos) {
+      const fundo = Math.min(1, Math.max(0, (nivel - (c.p.y - RAIO_GELO)) / (2 * RAIO_GELO)));
+      if (fundo <= 0) continue;
+      const a = giroSuco * dt * fundo, cs = Math.cos(a), sn = Math.sin(a), x = c.p.x, z = c.p.z;
+      c.p.x = x * cs - z * sn; c.p.z = x * sn + z * cs; c.m.rotation.y += a;
+    }
     // batida no vidro (parede do cone) e entre os cubos, algumas vezes por quadro para ficar firme
-    for (let it = 0; it < 4; it++) {
+    for (let it = 0; it < (quebrada ? 0 : 4); it++) {
       for (const c of ativos) {
         const r = Math.hypot(c.p.x, c.p.z) || 1e-6;
         nCone.set(-1, K).normalize();                         // normal da parede, para dentro e para cima
@@ -461,6 +472,11 @@ function iniciar() {
     gotasNaTela = vivas.length > 0;
     for (let i = vivas.length - 1; i >= 0; i--) {
       const g = vivas[i];
+      if (quebrada) {
+        g.vy -= G * dt; g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
+        if (g.y < 0.01) { vivas.splice(i, 1); poca.alvo = Math.min(0.85, poca.alvo + 0.0028); }
+        continue;
+      }
       if (g.parede) { g.vy = Math.max(-0.35, g.vy - G * 0.3 * dt); g.r *= 1 - dt * 0.6; } // escorre no vidro e vai sumindo
       else g.vy -= G * dt;
       g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt;
@@ -551,6 +567,19 @@ function iniciar() {
     }
   })();
   const texDe = (canvas, cor) => { const t = new THREE.CanvasTexture(canvas); if (cor) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  // relevo de verdade: transforma o desenho de alturas (gominhos altos, películas fundas) em mapa de normais
+  const normaisDe = (canvas, forca) => {
+    const W = canvas.width, Hh = canvas.height, src = canvas.getContext("2d").getImageData(0, 0, W, Hh).data;
+    const out = document.createElement("canvas"); out.width = W; out.height = Hh;
+    const ctx = out.getContext("2d"), img = ctx.createImageData(W, Hh), d = img.data;
+    const h = (x, y) => src[(((y + Hh) % Hh) * W + ((x + W) % W)) * 4] / 255;
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+      const dx = (h(x + 1, y) - h(x - 1, y)) * forca, dy = (h(x, y + 1) - h(x, y - 1)) * forca, l = Math.hypot(dx, dy, 1), k = (y * W + x) * 4;
+      d[k] = (-dx / l * 0.5 + 0.5) * 255; d[k + 1] = (dy / l * 0.5 + 0.5) * 255; d[k + 2] = (1 / l * 0.5 + 0.5) * 255; d[k + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return texDe(out);
+  };
   // a lateral da rodela: casca com poros
   const cascaLado = (() => {
     const c = document.createElement("canvas"); c.width = 1024; c.height = 64;
@@ -587,22 +616,33 @@ function iniciar() {
     };
   };
   const polpaMat = new THREE.MeshPhysicalMaterial({
-    map: texDe(corLar, true), bumpMap: texDe(altLar), bumpScale: 1.1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.06,
+    map: texDe(corLar, true), normalMap: normaisDe(altLar, 6), normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05,
     sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#ff5a00"), emissiveIntensity: 0.05, envMapIntensity: 0.5,
   });
   translucida(polpaMat, 0.7);
   const cascaMat = new THREE.MeshPhysicalMaterial({ map: cascaLado, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.25 });
   const corteMat = new THREE.MeshPhysicalMaterial({ map: corteLado, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.08, side: THREE.DoubleSide });
   translucida(corteMat, 0.9);
-  const RL = 0.22, ESP_L = 0.04;
+  const RL = 0.2, ESP_L = 0.036, CORTE = 0.014; // corte bem fino, reto, do meio até a casca
   const fruta = new THREE.Group();
-  // meia rodela: só a metade de cima (z negativo vira "para cima" quando ela fica em pé); o corte reto fica embaixo
-  const meia = new THREE.Mesh(new THREE.CylinderGeometry(RL, RL, ESP_L, 96, 1, false, Math.PI / 2, Math.PI), [cascaMat, polpaMat, polpaMat]);
-  const faceReta = new THREE.Mesh(new THREE.PlaneGeometry(2 * RL, ESP_L), corteMat);
-  meia.add(faceReta);
-  fruta.add(meia);
-  const ANG_FRUTA = 0.55;
-  const FRUTA_FIM = new THREE.Vector3(Math.cos(ANG_FRUTA) * (RBORDA + 0.004), H - 0.035, Math.sin(ANG_FRUTA) * (RBORDA + 0.004));
+  // rodela inteira com um corte do meio até a casca: é por ali que ela entra na borda da taça, como no bar
+  const rodela = new THREE.Mesh(new THREE.CylinderGeometry(RL - 0.006, RL - 0.006, ESP_L, 128, 1, false, CORTE / 2, Math.PI * 2 - CORTE), [cascaMat, polpaMat, polpaMat]);
+  fruta.add(rodela);
+  // casca com a borda arredondada (não é um corte reto de papelão)
+  const casca = new THREE.Mesh(new THREE.TorusGeometry(RL - 0.008, ESP_L / 2 + 0.002, 10, 128, Math.PI * 2 - CORTE), cascaMat);
+  casca.rotation.x = Math.PI / 2; casca.rotation.z = Math.PI / 2 + CORTE / 2;
+  fruta.add(casca);
+  // as duas faces do corte (a polpa vista por dentro)
+  for (const a of [CORTE / 2, -CORTE / 2]) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(RL, ESP_L), corteMat);
+    f.position.set(Math.sin(a) * RL / 2, 0, Math.cos(a) * RL / 2);
+    f.rotation.y = a + Math.PI / 2;
+    fruta.add(f);
+  }
+  // de frente para quem olha, com a borda da taça entrando no corte até o meio da rodela:
+  // metade fica por dentro da taça (encostando no drink) e metade por fora
+  const ANG_FRUTA = 0.28;
+  const FRUTA_FIM = new THREE.Vector3(Math.cos(ANG_FRUTA) * RBORDA, H + 0.004, Math.sin(ANG_FRUTA) * RBORDA);
   fruta.rotation.order = "YXZ";
   fruta.rotation.y = -ANG_FRUTA;
   fruta.rotation.x = Math.PI / 2;
@@ -705,6 +745,25 @@ function iniciar() {
   const INCL_FIM = 0.34;
 
 
+  // ---------- quando a taça quebra: sobra o pé, o bojo vira cacos e o drink vira poça no balcão ----------
+  const pe = new THREE.Mesh(new THREE.LatheGeometry([...perfil.slice(0, 9), new THREE.Vector2(0.02, 1.02), new THREE.Vector2(0, 1.02)], 96), cristal);
+  pe.visible = false; pe.renderOrder = 2;
+  copo.add(pe);
+  const cacoMat = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.04, metalness: 0, transparent: true, opacity: 0.42, clearcoat: 1, envMapIntensity: 2.2, side: THREE.DoubleSide, depthWrite: false });
+  const cacos = [];
+  for (let i = 0; i < 64; i++) {
+    const t = 0.02 + Math.random() * 0.1, g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, t * (0.6 + Math.random()), 0, 0, t * (Math.random() - 0.2), t * (0.5 + Math.random()), 0.004], 3));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, cacoMat);
+    m.visible = false; m.renderOrder = 3;
+    copo.add(m);
+    cacos.push({ m, v: new THREE.Vector3(), giro: new THREE.Vector3(), parado: false });
+  }
+  const pocaMesh = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.MeshBasicMaterial({ color: "#7a2c04", transparent: true, opacity: 0.93 }) /* cor do drink sem reflexo de luz branca (com reflexo ficava rosada) */);
+  pocaMesh.rotation.x = -Math.PI / 2; pocaMesh.position.y = 0.003; pocaMesh.scale.setScalar(0.001); pocaMesh.visible = false;
+  copo.add(pocaMesh);
+
   // sombra macia no chão branco
   const sombra = (() => {
     const c = document.createElement("canvas"); c.width = c.height = 256;
@@ -756,10 +815,10 @@ function iniciar() {
     }
     // balcão preto (termina um pouco atrás da taça) com um brilho macio de luz embaixo dela
     const balcao = new THREE.Mesh(new THREE.PlaneGeometry(40, 8), new THREE.MeshBasicMaterial({ color: "#070709" }));
-    balcao.rotation.x = -Math.PI / 2; balcao.position.set(0, 0, 1.5);
+    balcao.rotation.x = -Math.PI / 2; balcao.position.set(0, -0.012, 1.5); // um pouco abaixo da base da taça (se ficar na mesma altura, os dois "brigam" e aparecem listras girando)
     cena.add(balcao);
     const brilhoChao = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), new THREE.MeshBasicMaterial({ map: brilhoTex, color: "#ffcf9a", transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
-    brilhoChao.rotation.x = -Math.PI / 2; brilhoChao.position.y = 0.002;
+    brilhoChao.rotation.x = -Math.PI / 2; brilhoChao.position.y = -0.006;
     cena.add(brilhoChao);
     // no escuro, o contorno do cristal e do gelo é claro (reflexo), não escuro
   }
@@ -790,7 +849,7 @@ function iniciar() {
   const tela = renderer.domElement;
   tela.style.touchAction = "pan-y"; // arrastar para cima/baixo continua rolando a página
   tela.style.cursor = "grab";
-  let giro = 0, velGiro = 0, arrastando = false, xAntes = 0, tAntes = 0;
+  let giro = 0, velGiro = 0, arrastando = false, xAntes = 0, tAntes = 0, velRotAntes = 0;
   tela.addEventListener("pointerdown", (e) => { arrastando = true; xAntes = e.clientX; tAntes = performance.now(); velGiro = 0; tela.setPointerCapture(e.pointerId); tela.style.cursor = "grabbing"; });
   tela.addEventListener("pointermove", (e) => {
     if (!arrastando) return;
@@ -800,6 +859,21 @@ function iniciar() {
     xAntes = e.clientX; tAntes = agora;
   });
   const soltar = () => { arrastando = false; tela.style.cursor = "grab"; };
+  // toque duplo em cima da taça: quebra
+  let toqueIni = { x: 0, y: 0, t: 0 }, ultimoToque = { x: -99, y: -99, t: 0 };
+  const mira = new THREE.Raycaster(), ponto = new THREE.Vector2();
+  tela.addEventListener("pointerdown", (e) => { toqueIni = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  tela.addEventListener("pointerup", (e) => {
+    const agora = performance.now();
+    if (Math.hypot(e.clientX - toqueIni.x, e.clientY - toqueIni.y) > 12 || agora - toqueIni.t > 320) return;
+    const duplo = agora - ultimoToque.t < 400 && Math.hypot(e.clientX - ultimoToque.x, e.clientY - ultimoToque.y) < 50;
+    ultimoToque = { x: e.clientX, y: e.clientY, t: duplo ? 0 : agora };
+    if (!duplo) return;
+    const ret = tela.getBoundingClientRect();
+    ponto.set(((e.clientX - ret.left) / ret.width) * 2 - 1, -((e.clientY - ret.top) / ret.height) * 2 + 1);
+    mira.setFromCamera(ponto, camera);
+    if (mira.intersectObjects([vidro, corpo, tampa, fruta, enfeite, ...cubos.map((c) => c.m)], true).length) quebrar();
+  });
   tela.addEventListener("pointerup", soltar);
   tela.addEventListener("pointercancel", soltar);
   addEventListener("resize", ajustar);
@@ -814,6 +888,7 @@ function iniciar() {
   function passo(dt) {
     tempo += dt;
     const t = tempo;
+    if (quebrada) { moverQuebra(dt); moverGelo(dt, t, nivel); moverGotas(dt, nivel); return; }
 
     const surge = suave(entre(t, 0, 0.8));
     copo.position.y = (1 - surge) * 0.35;
@@ -869,6 +944,69 @@ function iniciar() {
     if (!avisou && t > 6.0) { avisou = true; pronto(); }
   }
 
+  // ---------- toque duplo na taça: ela quebra, o drink derrama e, depois de uns segundos, um drink novo é servido ----------
+  const queda = { fruta: { y: 0, v: 0 }, canudo: { y: 0, v: 0 } };
+  const sorteio = (a, b) => a + Math.random() * (b - a);
+  function quebrar() {
+    if (quebrada || tempo < 6.2) return;
+    quebrada = true; tQuebra = tempo;
+    vidro.visible = false; marcaVidro.visible = false; pe.visible = true;
+    corpo.visible = false; tampa.visible = false; fio.visible = false;
+    for (const c of cacos) {
+      const y = sorteio(A + 0.05, H), ang = sorteio(0, Math.PI * 2), r = rDentro(y) + 0.006, f = sorteio(0.7, 2.2);
+      c.m.position.set(Math.cos(ang) * r, y, Math.sin(ang) * r);
+      c.m.rotation.set(sorteio(0, 6), sorteio(0, 6), sorteio(0, 6));
+      c.v.set(Math.cos(ang) * f, sorteio(0.4, 1.8), Math.sin(ang) * f);
+      c.giro.set(sorteio(-12, 12), sorteio(-12, 12), sorteio(-12, 12));
+      c.parado = false; c.m.visible = true;
+    }
+    // o drink sai em gotas e jorros e vira uma poça no balcão
+    vivas.length = 0;
+    for (let i = 0; i < MAX_GOTAS; i++) {
+      const y = sorteio(A, nivel), ang = sorteio(0, Math.PI * 2), r = Math.random() * rDentro(y), f = sorteio(0.3, 1.6);
+      const cor = corLaranja.clone().lerp(corGroselha, Math.max(0, 1 - (y - A) / 0.25) * 0.8);
+      vivas.push({ x: Math.cos(ang) * r, y, z: Math.sin(ang) * r, vx: Math.cos(ang) * f, vy: sorteio(-0.2, 1.1), vz: Math.sin(ang) * f, r: sorteio(0.006, 0.016), cor, parede: false });
+    }
+    gotasNaTela = true;
+    poca.alvo = 0.32; poca.r = 0.05; pocaMesh.visible = true;
+    for (const c of cubos) { c.v.set(c.p.x * 3 + sorteio(-0.5, 0.5), sorteio(0.6, 1.6), c.p.z * 3 + sorteio(-0.5, 0.5)); c.giro.set(sorteio(-8, 8), sorteio(-8, 8), sorteio(-8, 8)); }
+    queda.fruta = { y: fruta.position.y, v: 0.6 };
+    queda.canudo = { y: enfeite.position.y, v: 0.4 };
+  }
+  function moverQuebra(dt) {
+    for (const c of cacos) {
+      if (c.parado) continue;
+      c.v.y -= G * dt; c.m.position.addScaledVector(c.v, dt);
+      c.m.rotation.x += c.giro.x * dt; c.m.rotation.y += c.giro.y * dt; c.m.rotation.z += c.giro.z * dt;
+      if (c.m.position.y < 0.004) {
+        c.m.position.y = 0.004; c.v.y *= -0.25; c.v.x *= 0.5; c.v.z *= 0.5; c.giro.multiplyScalar(0.4);
+        if (c.v.lengthSq() < 0.004) { c.parado = true; c.m.rotation.x = -Math.PI / 2; c.m.rotation.y = 0; }
+      }
+    }
+    poca.r += (poca.alvo - poca.r) * Math.min(1, dt * 2.2);
+    pocaMesh.scale.setScalar(Math.max(0.001, poca.r));
+    // laranja e canudo caem no balcão e deitam
+    const f = queda.fruta; f.v -= G * dt; f.y = Math.max(0.02, f.y + f.v * dt); if (f.y === 0.02) f.v = 0;
+    fruta.position.y = f.y; fruta.position.x += (FRUTA_FIM.x * 1.6 - fruta.position.x) * Math.min(1, dt * 2);
+    fruta.rotation.x += (0 - fruta.rotation.x) * Math.min(1, dt * 5);
+    const k = queda.canudo; k.v -= G * dt; k.y = Math.max(0.02, k.y + k.v * dt); if (k.y === 0.02) k.v = 0;
+    enfeite.position.y = k.y; enfeite.rotation.z += (Math.PI / 2 - enfeite.rotation.z) * Math.min(1, dt * 4);
+    if (tempo - tQuebra > 5.5) reiniciar();
+  }
+  function reiniciar() {
+    quebrada = false; tempo = 0; giroSuco = 0;
+    nivel = A + 0.0005; vol = 0; nuvem = -10; nuvemForca = 0; fundoGroselha = A - 1; nivelDesenhado = -1;
+    hAtual.fill(0); hAntes.fill(0); agitacao = 1;
+    vidro.visible = true; marcaVidro.visible = true; pe.visible = false; pocaMesh.visible = false; poca.alvo = 0; poca.r = 0;
+    for (const c of cacos) c.m.visible = false;
+    vivas.length = 0; gotasNaTela = true;
+    for (const c of cubos) { c.p.copy(c.p0); c.v.set(0, -0.4, 0); c.tocouSuco = false; c.m.visible = false; c.m.rotation.set(0, 0, 0); c.giro.set(sorteio(-3, 3), sorteio(-3, 3), sorteio(-3, 3)); }
+    Object.assign(molaFruta, { y: FRUTA_FIM.y + 1.8, v: 0, gira: 0, vg: 0, bateu: false });
+    fruta.visible = false; fruta.rotation.x = Math.PI / 2;
+    Object.assign(molaCanudo, { y: PE_CANUDO.y + 2.6, v: 0, incl: 0, vi: 0 });
+    enfeite.visible = false; enfeite.rotation.set(0, 0, 0);
+  }
+
   if (parado) for (let i = 0; i < 720; i++) passo(1 / 60); // sem animação: já mostra o drink pronto
 
   // prepara todos os materiais antes de começar (assim nada engasga quando o gelo, a laranja ou o canudo aparecem)
@@ -897,8 +1035,25 @@ function iniciar() {
     uLuzAtras.value.set(1.0, 1.7, -4.4).normalize().transformDirection(camera.matrixWorldInverse);
     passo(dt);
     // a taça gira devagar e para com o "JC Drinks" de frente; depois só balança de leve; por cima, o giro do dedo (com embalo)
-    if (!arrastando) { giro += velGiro * dt; velGiro *= Math.pow(0.05, dt); }
+    // ao soltar: o embalo continua e uma "mola" leva a taça, sem tranco, até a frente mais próxima (JC Drinks aparecendo)
+    if (!arrastando) {
+      const volta = Math.PI * 2, alvo = Math.round((giro + velGiro * 0.45) / volta) * volta;
+      velGiro += ((alvo - giro) * 9 - velGiro * 5.2) * dt;
+      giro += velGiro * dt;
+    }
+    const rotAntes = copo.rotation.y;
     copo.rotation.y = giro + (tempo < 6 ? -0.6 * (1 - suave(tempo / 6)) : 0.14 * Math.sin((tempo - 6) * 0.3));
+    // o suco tem inércia: quando a taça acelera ou freia, ele fica um pouco para trás, faz ondinhas e leva o gelo junto
+    if (dt > 0 && !quebrada) {
+      const velRot = (copo.rotation.y - rotAntes) / dt, tranco = velRot - velRotAntes;
+      velRotAntes = velRot;
+      giroSuco = giroSuco * Math.exp(-1.4 * dt) - tranco * 0.55;
+      const forca = Math.min(0.03, Math.abs(tranco) * 0.004 + Math.abs(giroSuco) * 0.0015);
+      if (forca > 0.0006 && tampa.visible) {
+        const r = rDentro(nivel) * 0.78;
+        for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + tempo; empurrar(Math.cos(a) * r, Math.sin(a) * r, forca * (i % 2 ? 1 : -1)); }
+      }
+    }
     if (neon.length) mexerNeon(tempo);
     renderer.render(cena, camera);
     requestAnimationFrame(quadro);
