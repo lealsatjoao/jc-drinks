@@ -5,7 +5,7 @@
 //  - onde ele bate, a superfície afunda e faz ondas (sem gotinhas voando, para parecer de verdade);
 //  - a superfície do suco tem equação de onda: treme no impacto, quando o gelo boia e quando as gotas caem;
 //  - a groselha entra pela superfície e afunda como uma nuvem até o fundo (é mais densa);
-//  - a rodela de limão cai e encaixa na borda e o canudo com guarda-chuva cai e se apoia no gelo.
+//  - a rodela de laranja cai e encaixa na borda e o canudo com guarda-chuva cai e se apoia no gelo.
 // O vidro reflete uma foto 360° de estúdio (img/estudio.hdr, Poly Haven, CC0).
 // Sem 3D (WebGL) no aparelho: fica a foto parada e o resto da página funciona igual.
 import * as THREE from "three";
@@ -179,32 +179,56 @@ function iniciar() {
 
   // ---------- gelo: cubos de verdade, com física (gravidade, batida no vidro e entre eles, boia no suco) ----------
   const G = 7.5; // gravidade em "câmera lenta" para ficar bonito
+  // gelo cristalino: quase transparente no meio, com reflexo forte nas quinas e faces de lado
   const gelo = new THREE.MeshPhysicalMaterial({
-    color: "#ffffff", roughness: 0.06, metalness: 0, transmission: 1, thickness: 0.18, ior: 1.31,
-    attenuationColor: new THREE.Color("#e6f3fb"), attenuationDistance: 0.9, clearcoat: 1, clearcoatRoughness: 0.08,
-    specularIntensity: 1, envMapIntensity: 1.4,
+    color: "#cfe6f0", roughness: 0.02, metalness: 0, transparent: true, opacity: 0.12, ior: 1.31,
+    clearcoat: 1, clearcoatRoughness: 0, specularIntensity: 1, envMapIntensity: 2.4,
   });
-  // contorno escuro nas faces de lado (refração do estúdio), para o gelo aparecer no fundo branco
-  gelo.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", `
-      float lado = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.2);
-      outgoingLight = mix(outgoingLight, vec3(0.42, 0.47, 0.52), lado * 0.75);
-      #include <opaque_fragment>`);
-  };
-  // bolhinhas e rachaduras por dentro do gelo
-  gelo.roughnessMap = (() => {
-    const c = document.createElement("canvas"); c.width = c.height = 256;
-    const x = c.getContext("2d");
-    x.fillStyle = "#101010"; x.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(255,255,255,${0.15 + Math.random() * 0.35})`; x.beginPath(); x.arc(Math.random() * 256, Math.random() * 256, 0.6 + Math.random() * 2.2, 0, Math.PI * 2); x.fill(); }
-    x.strokeStyle = "rgba(255,255,255,.22)"; x.lineWidth = 1;
-    for (let i = 0; i < 6; i++) { x.beginPath(); let px = Math.random() * 256, py = Math.random() * 256; x.moveTo(px, py); for (let k = 0; k < 5; k++) { px += (Math.random() - 0.5) * 60; py += (Math.random() - 0.5) * 60; x.lineTo(px, py); } x.stroke(); }
+  // faces do gelo não são lisas: ondulações de quando começa a derreter (mapa de relevo feito em código)
+  gelo.normalMap = (() => {
+    const T = 256, alt = new Float32Array(T * T);
+    for (let o = 0; o < 5; o++) {
+      const f = 2 + o * 3, fase = Math.random() * 10;
+      for (let y = 0; y < T; y++) for (let x = 0; x < T; x++)
+        alt[y * T + x] += Math.sin((x / T) * f * 6.283 + fase + Math.sin((y / T) * f * 4.1) * 1.3) * Math.cos((y / T) * f * 6.283 + fase * 0.7) / (o + 1);
+    }
+    const c = document.createElement("canvas"); c.width = c.height = T;
+    const x = c.getContext("2d"), img = x.createImageData(T, T);
+    for (let y = 0; y < T; y++) for (let xx = 0; xx < T; xx++) {
+      const h = (a, b) => alt[((b + T) % T) * T + ((a + T) % T)];
+      const dx = (h(xx + 1, y) - h(xx - 1, y)) * 0.9, dy = (h(xx, y + 1) - h(xx, y - 1)) * 0.9;
+      const l = Math.hypot(dx, dy, 1), k = (y * T + xx) * 4;
+      img.data[k] = (-dx / l * 0.5 + 0.5) * 255; img.data[k + 1] = (-dy / l * 0.5 + 0.5) * 255; img.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return t;
   })();
+  gelo.normalScale = new THREE.Vector2(0.6, 0.6);
+  // quinas e faces de lado ficam escuras e azuladas (luz que reflete por dentro), como gelo de verdade em fundo branco
+  gelo.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace("#include <opaque_fragment>", `
+      float lado = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.0);
+      float luzGelo = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
+      float reflexoGelo = smoothstep(0.9, 1.6, luzGelo);
+      diffuseColor.a = clamp(0.1 + lado * 0.55 + reflexoGelo * 0.75, 0.0, 1.0);
+      outgoingLight = mix(mix(vec3(0.93, 0.97, 1.0), vec3(0.3, 0.4, 0.48), lado * 0.8), vec3(1.3), reflexoGelo);
+      #include <opaque_fragment>`);
+  };
+  // miolo branco e nublado (água que congelou por último) e bolhinhas presas
+  const miolo = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 1, transparent: true, opacity: 0.16, depthWrite: false });
+  const bolha = new THREE.MeshPhysicalMaterial({ color: "#ffffff", roughness: 0.2, transparent: true, opacity: 0.55, depthWrite: false });
   const LADO = 0.16, RAIO_GELO = LADO * 0.84; // raio que cobre os cantos do cubo: o gelo nunca atravessa o vidro
   const cubos = [0, 1, 2, 3, 4].map((i) => {
-    const m = new THREE.Mesh(new RoundedBoxGeometry(LADO, LADO * 0.94, LADO * 1.02, 4, 0.03), gelo);
+    const m = new THREE.Mesh(new RoundedBoxGeometry(LADO, LADO * 0.94, LADO * 1.02, 4, 0.025), gelo);
+    const nuvemGelo = new THREE.Mesh(new RoundedBoxGeometry(LADO * 0.5, LADO * 0.42, LADO * 0.46, 2, 0.04), miolo);
+    nuvemGelo.rotation.set(0.3 * i, 0.5, 0.2);
+    m.add(nuvemGelo);
+    for (let k = 0; k < 5; k++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.004 + Math.random() * 0.005, 8, 6), bolha);
+      b.position.set((Math.random() - 0.5) * LADO * 0.6, (Math.random() - 0.5) * LADO * 0.6, (Math.random() - 0.5) * LADO * 0.6);
+      m.add(b);
+    }
     m.visible = false;
     copo.add(m);
     const ang = i * 2.2 + 0.4;
@@ -380,31 +404,31 @@ function iniciar() {
     if (gotas.instanceColor) gotas.instanceColor.needsUpdate = true;
   }
 
-  // ---------- rodela de limão de verdade, desenhada em código ----------
+  // ---------- rodela de laranja de verdade, desenhada em código ----------
   // casca com poros de óleo, parte branca, 10 gomos com gominhos de suco virados para o centro,
   // películas brancas entre os gomos, miolo; relevo (bump) e brilho molhado; corte até o meio para encaixar na borda.
   const aleatorio = (() => { let n = 7; return () => ((n = (n * 16807) % 2147483647) - 1) / 2147483646; })();
   const TAM = 1024, M = TAM / 2;
-  const corLim = document.createElement("canvas"), altLim = document.createElement("canvas");
-  corLim.width = corLim.height = altLim.width = altLim.height = TAM;
+  const corLar = document.createElement("canvas"), altLar = document.createElement("canvas");
+  corLar.width = corLar.height = altLar.width = altLar.height = TAM;
   (() => {
-    const c = corLim.getContext("2d"), h = altLim.getContext("2d");
-    const R = M, R_CASCA = R * 0.955, R_BRANCO = R * 0.885, R_GOMO = R * 0.86, GOMOS = 10;
+    const c = corLar.getContext("2d"), h = altLar.getContext("2d");
+    const R = M, R_CASCA = R * 0.935, R_BRANCO = R * 0.9, R_GOMO = R * 0.89, GOMOS = 10;
     // casca
     let g = c.createRadialGradient(M, M, R_CASCA, M, M, R);
-    g.addColorStop(0, "#5f9a2a"); g.addColorStop(0.5, "#3f7a1b"); g.addColorStop(1, "#24510d");
+    g.addColorStop(0, "#f7a23b"); g.addColorStop(0.5, "#e9800f"); g.addColorStop(1, "#c25f05");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#9a9a9a"; h.beginPath(); h.arc(M, M, R, 0, Math.PI * 2); h.fill();
     // parte branca (mesocarpo), meio translúcida, com um verde claro perto da casca
     g = c.createRadialGradient(M, M, R_GOMO, M, M, R_CASCA);
-    g.addColorStop(0, "#eef0d4"); g.addColorStop(0.6, "#f2f2dc"); g.addColorStop(1, "#c9dc8f");
+    g.addColorStop(0, "#fde6bd"); g.addColorStop(0.6, "#fbdca8"); g.addColorStop(1, "#f6b05a");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R_CASCA, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#bdbdbd"; h.beginPath(); h.arc(M, M, R_CASCA, 0, Math.PI * 2); h.fill();
     // fundo dos gomos (vira a película entre eles)
-    c.fillStyle = "#e6ecc4"; c.beginPath(); c.arc(M, M, R_GOMO, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#f4c27c"; c.beginPath(); c.arc(M, M, R_GOMO, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#d0d0d0"; h.beginPath(); h.arc(M, M, R_GOMO, 0, Math.PI * 2); h.fill();
     for (let i = 0; i < GOMOS; i++) {
-      const larg = (Math.PI * 2) / GOMOS, a0 = i * larg + 0.028 + (aleatorio() - 0.5) * 0.02, a1 = (i + 1) * larg - 0.028;
+      const larg = (Math.PI * 2) / GOMOS, a0 = i * larg + 0.014 + (aleatorio() - 0.5) * 0.01, a1 = (i + 1) * larg - 0.014;
       const meio = (a0 + a1) / 2, r0 = R * 0.075;
       const gomo = (ctx) => {
         ctx.beginPath();
@@ -415,7 +439,7 @@ function iniciar() {
       };
       // polpa: verde-amarelado, mais claro e translúcido no centro
       g = c.createRadialGradient(M, M, r0, M, M, R_GOMO);
-      g.addColorStop(0, "#d6e57a"); g.addColorStop(0.45, "#b3cf3a"); g.addColorStop(1, "#8fb522");
+      g.addColorStop(0, "#ffb547"); g.addColorStop(0.45, "#f7891c"); g.addColorStop(1, "#e06a06");
       c.save(); gomo(c); c.fillStyle = g; c.fill(); c.clip();
       h.save(); gomo(h); h.fillStyle = "#6a6a6a"; h.fill(); h.clip();
       // gominhos de suco (vesículas): gotas compridas apontando para o centro
@@ -423,9 +447,9 @@ function iniciar() {
         const a = a0 + aleatorio() * (a1 - a0), rr = r0 + 10 + Math.pow(aleatorio(), 0.8) * (R_GOMO - r0 - 20);
         const x = M + Math.cos(a) * rr, y = M + Math.sin(a) * rr;
         const comp = 7 + (rr / R) * 26 * (0.6 + aleatorio() * 0.6), lar = 2.2 + (rr / R) * 5 * (0.6 + aleatorio() * 0.6);
-        c.fillStyle = `rgba(${aleatorio() < 0.5 ? "238,246,170" : "150,185,40"},${0.25 + aleatorio() * 0.35})`;
+        c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,214,140" : "222,112,12"},${0.25 + aleatorio() * 0.35})`;
         c.beginPath(); c.ellipse(x, y, comp, lar, a, 0, Math.PI * 2); c.fill();
-        c.fillStyle = `rgba(255,255,235,${0.25 + aleatorio() * 0.4})`;
+        c.fillStyle = `rgba(255,246,218,${0.25 + aleatorio() * 0.4})`;
         c.beginPath(); c.ellipse(x - Math.cos(a) * comp * 0.3, y - Math.sin(a) * comp * 0.3, comp * 0.35, lar * 0.35, a, 0, Math.PI * 2); c.fill();
         const hg = h.createRadialGradient(x, y, 0, x, y, comp);
         hg.addColorStop(0, "rgba(255,255,255,.75)"); hg.addColorStop(1, "rgba(255,255,255,0)");
@@ -435,19 +459,19 @@ function iniciar() {
       // sementinha às vezes
       if (i % 4 === 1) {
         const rr = R * 0.22, x = M + Math.cos(meio) * rr, y = M + Math.sin(meio) * rr;
-        c.fillStyle = "#f3eccb"; c.beginPath(); c.ellipse(x, y, 16, 7, meio, 0, Math.PI * 2); c.fill();
+        c.fillStyle = "#f8ecd0"; c.beginPath(); c.ellipse(x, y, 16, 7, meio, 0, Math.PI * 2); c.fill();
         h.fillStyle = "#ffffff"; h.beginPath(); h.ellipse(x, y, 16, 7, meio, 0, Math.PI * 2); h.fill();
       }
     }
     // miolo
     g = c.createRadialGradient(M, M, 0, M, M, R * 0.085);
-    g.addColorStop(0, "#f7f6e2"); g.addColorStop(1, "#e2e9bb");
+    g.addColorStop(0, "#fff6e4"); g.addColorStop(1, "#f7dcb0");
     c.fillStyle = g; c.beginPath(); c.arc(M, M, R * 0.085, 0, Math.PI * 2); c.fill();
     h.fillStyle = "#e0e0e0"; h.beginPath(); h.arc(M, M, R * 0.085, 0, Math.PI * 2); h.fill();
     // poros de óleo na casca
     for (let k = 0; k < 900; k++) {
       const a = aleatorio() * Math.PI * 2, rr = R_CASCA + 4 + aleatorio() * (R - R_CASCA - 8);
-      c.fillStyle = `rgba(${aleatorio() < 0.5 ? "120,170,60" : "20,55,8"},${0.3 + aleatorio() * 0.4})`;
+      c.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,192,95" : "188,84,4"},${0.3 + aleatorio() * 0.4})`;
       c.beginPath(); c.arc(M + Math.cos(a) * rr, M + Math.sin(a) * rr, 1 + aleatorio() * 2, 0, Math.PI * 2); c.fill();
     }
   })();
@@ -456,24 +480,24 @@ function iniciar() {
   const cascaLado = (() => {
     const c = document.createElement("canvas"); c.width = 1024; c.height = 64;
     const x = c.getContext("2d");
-    const g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, "#2c5c11"); g.addColorStop(0.5, "#4a8620"); g.addColorStop(1, "#2c5c11");
+    const g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, "#c4600a"); g.addColorStop(0.5, "#ee8a1c"); g.addColorStop(1, "#c4600a");
     x.fillStyle = g; x.fillRect(0, 0, 1024, 64);
-    for (let k = 0; k < 1400; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "130,180,70" : "18,48,6"},${0.3 + aleatorio() * 0.4})`; x.beginPath(); x.arc(aleatorio() * 1024, aleatorio() * 64, 0.8 + aleatorio() * 1.8, 0, Math.PI * 2); x.fill(); }
+    for (let k = 0; k < 1400; k++) { x.fillStyle = `rgba(${aleatorio() < 0.5 ? "255,200,110" : "170,70,4"},${0.3 + aleatorio() * 0.4})`; x.beginPath(); x.arc(aleatorio() * 1024, aleatorio() * 64, 0.8 + aleatorio() * 1.8, 0, Math.PI * 2); x.fill(); }
     return texDe(c, true);
   })();
   const polpaMat = new THREE.MeshPhysicalMaterial({
-    map: texDe(corLim, true), bumpMap: texDe(altLim), bumpScale: 2.2, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.12,
-    sheen: 0.25, sheenColor: new THREE.Color("#f6ffd6"), sheenRoughness: 0.5, emissive: new THREE.Color("#4a6008"), emissiveIntensity: 0.3,
+    map: texDe(corLar, true), bumpMap: texDe(altLar), bumpScale: 2.2, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.12,
+    sheen: 0.1, sheenColor: new THREE.Color("#fff0d6"), sheenRoughness: 0.5, emissive: new THREE.Color("#8a3400"), emissiveIntensity: 0.4,
   });
   const cascaMat = new THREE.MeshPhysicalMaterial({ map: cascaLado, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.25 });
-  const RL = 0.17;
+  const RL = 0.2;
   // corte de um lado ao meio (onde a borda da taça entra)
   const CORTE = 0.07;
-  const geoLimao = new THREE.CylinderGeometry(RL, RL, 0.034, 128, 1, false, CORTE / 2, Math.PI * 2 - CORTE);
-  const limao = new THREE.Group();
-  const rodela = new THREE.Mesh(geoLimao, [cascaMat, polpaMat, polpaMat]);
+  const geoLaranja = new THREE.CylinderGeometry(RL, RL, 0.034, 128, 1, false, CORTE / 2, Math.PI * 2 - CORTE);
+  const laranja = new THREE.Group();
+  const rodela = new THREE.Mesh(geoLaranja, [cascaMat, polpaMat, polpaMat]);
   // as duas faces do corte (polpa por dentro)
-  const faceCorte = new THREE.MeshPhysicalMaterial({ color: "#c9dc6a", roughness: 0.3, clearcoat: 1, side: THREE.DoubleSide });
+  const faceCorte = new THREE.MeshPhysicalMaterial({ color: "#f6a33e", roughness: 0.3, clearcoat: 1, side: THREE.DoubleSide });
   for (const a of [CORTE / 2, -CORTE / 2]) {
     const f = new THREE.Mesh(new THREE.PlaneGeometry(RL, 0.034), faceCorte);
     f.position.set(Math.sin(a) * RL / 2, 0, Math.cos(a) * RL / 2);
@@ -481,24 +505,53 @@ function iniciar() {
     rodela.add(f);
   }
   // o corte (em +z da rodela) fica para baixo quando ela é virada em pé, e a borda da taça entra nele
-  limao.add(rodela);
-  const ANG_LIMAO = 0.55;
-  const LIMAO_FIM = new THREE.Vector3(Math.cos(ANG_LIMAO) * (RBORDA + 0.004), H + RL * 0.08, Math.sin(ANG_LIMAO) * (RBORDA + 0.004));
-  limao.rotation.order = "YXZ";
-  limao.rotation.y = -ANG_LIMAO;
-  limao.rotation.x = Math.PI / 2;
-  limao.visible = false;
-  copo.add(limao);
-  const molaLimao = { y: LIMAO_FIM.y + 1.8, v: 0, gira: 0, vg: 0, bateu: false };
+  laranja.add(rodela);
+  const ANG_LARANJA = 0.55;
+  const LARANJA_FIM = new THREE.Vector3(Math.cos(ANG_LARANJA) * (RBORDA + 0.004), H + RL * 0.08, Math.sin(ANG_LARANJA) * (RBORDA + 0.004));
+  laranja.rotation.order = "YXZ";
+  laranja.rotation.y = -ANG_LARANJA;
+  laranja.rotation.x = Math.PI / 2;
+  laranja.visible = false;
+  copo.add(laranja);
+  const molaLaranja = { y: LARANJA_FIM.y + 1.8, v: 0, gira: 0, vg: 0, bateu: false };
 
   // ---------- canudo com guarda-chuva de papel ----------
   const enfeite = new THREE.Group();
+  // canudo dobrável: reto, sanfona (os anéis que dobram) e a ponta virada em "L" para fora
   const L_CANUDO = 1.05;
   const canudo = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.016, 0.016, L_CANUDO, 24, 1, true),
+    (() => {
+      const RETO = 0.95, RC = 0.07, DOBRA = THREE.MathUtils.degToRad(80), PONTA = 0.2, R = 0.016;
+      const SANF0 = RETO - 0.05, ARCO = RC * DOBRA, TOTAL = RETO + ARCO + PONTA;
+      // ponto e direção ao longo do canudo (no plano xy; a ponta vira para -x)
+      const ponto = (u) => {
+        if (u <= RETO) return [0, u, 0, 1];
+        if (u <= RETO + ARCO) { const t = (u - RETO) / RC; return [-RC + RC * Math.cos(t), RETO + RC * Math.sin(t), -Math.sin(t), Math.cos(t)]; }
+        const t = DOBRA, l = u - RETO - ARCO;
+        return [-RC + RC * Math.cos(t) - Math.sin(t) * l, RETO + RC * Math.sin(t) + Math.cos(t) * l, -Math.sin(t), Math.cos(t)];
+      };
+      const raio = (u) => (u >= SANF0 && u <= RETO + ARCO + 0.03 ? R * (1 + 0.16 * Math.pow(Math.abs(Math.sin((u - SANF0) * 260)), 0.6)) : R);
+      const FAT = 260, VOLTA = 20, vs = [], idx = [];
+      for (let i = 0; i <= FAT; i++) {
+        const u = (i / FAT) * TOTAL, [x, y, tx, ty] = ponto(u), r = raio(u);
+        const nx = ty, ny = -tx; // normal no plano; a outra direção é o eixo z
+        for (let k = 0; k < VOLTA; k++) {
+          const a = (k / VOLTA) * Math.PI * 2;
+          vs.push(x + (Math.cos(a) * nx) * r, y + (Math.cos(a) * ny) * r, Math.sin(a) * r);
+        }
+      }
+      for (let i = 0; i < FAT; i++) for (let k = 0; k < VOLTA; k++) {
+        const a = i * VOLTA + k, b = i * VOLTA + ((k + 1) % VOLTA), c = a + VOLTA, d = b + VOLTA;
+        idx.push(a, c, b, b, c, d);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(vs, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      return g;
+    })(),
     new THREE.MeshPhysicalMaterial({ color: "#151412", roughness: 0.28, clearcoat: 0.9, side: THREE.DoubleSide }),
   );
-  canudo.position.y = L_CANUDO / 2;
   enfeite.add(canudo);
   // guarda-chuva preso no meio do canudo (o canudo passa pelo centro dele): papel em gomos, dobras e varetas
   const chapeu = new THREE.Mesh(
@@ -548,13 +601,14 @@ function iniciar() {
     vareta.rotation.set(0, -a, 1.22);
     guarda.add(vareta);
   }
-  guarda.position.set(0, L_CANUDO * 0.8, 0);
+  guarda.position.set(0, 0.8, 0);
   enfeite.add(guarda);
   enfeite.visible = false;
   copo.add(enfeite);
   const PE_CANUDO = new THREE.Vector3(0.03, A + 0.06, 0);
   const molaCanudo = { y: PE_CANUDO.y + 2.6, v: 0, incl: 0, vi: 0 };
   const INCL_FIM = 0.34;
+
 
   // sombra macia no chão branco
   const sombra = (() => {
@@ -623,17 +677,17 @@ function iniciar() {
     if (tampa.visible) atualizarTampa(nivel);
     moverGotas(dt, nivel);
 
-    // limão: cai e encaixa na borda com um quique amortecido
+    // laranja: cai e encaixa na borda com um quique amortecido
     if (t > 5.25) {
-      limao.visible = true;
-      if (!molaLimao.bateu) {
-        molaLimao.v -= G * dt; molaLimao.y += molaLimao.v * dt;
-        if (molaLimao.y <= LIMAO_FIM.y) { molaLimao.y = LIMAO_FIM.y; molaLimao.v *= -0.28; molaLimao.vg = 2.4; if (Math.abs(molaLimao.v) < 0.2) molaLimao.bateu = true; }
-      } else { molaLimao.v += (-(molaLimao.y - LIMAO_FIM.y) * 140 - molaLimao.v * 12) * dt; molaLimao.y += molaLimao.v * dt; }
-      molaLimao.vg += (-molaLimao.gira * 90 - molaLimao.vg * 7) * dt;
-      molaLimao.gira += molaLimao.vg * dt;
-      limao.position.set(LIMAO_FIM.x, molaLimao.y, LIMAO_FIM.z);
-      limao.rotation.z = molaLimao.gira * 0.12;
+      laranja.visible = true;
+      if (!molaLaranja.bateu) {
+        molaLaranja.v -= G * dt; molaLaranja.y += molaLaranja.v * dt;
+        if (molaLaranja.y <= LARANJA_FIM.y) { molaLaranja.y = LARANJA_FIM.y; molaLaranja.v *= -0.28; molaLaranja.vg = 2.4; if (Math.abs(molaLaranja.v) < 0.2) molaLaranja.bateu = true; }
+      } else { molaLaranja.v += (-(molaLaranja.y - LARANJA_FIM.y) * 140 - molaLaranja.v * 12) * dt; molaLaranja.y += molaLaranja.v * dt; }
+      molaLaranja.vg += (-molaLaranja.gira * 90 - molaLaranja.vg * 7) * dt;
+      molaLaranja.gira += molaLaranja.vg * dt;
+      laranja.position.set(LARANJA_FIM.x, molaLaranja.y, LARANJA_FIM.z);
+      laranja.rotation.z = molaLaranja.gira * 0.12;
     }
     // canudo com guarda-chuva: cai, desce entre o gelo e se apoia nele
     if (t > 5.5) {
