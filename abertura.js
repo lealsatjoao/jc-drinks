@@ -2,7 +2,7 @@
 //  - o gelo cai primeiro: bate no vidro e um no outro e fica no fundo da taça; quando o suco sobe, ele boia;
 //  - o fio de suco cai pela gravidade e afina conforme ganha velocidade (conservação do volume);
 //    a vazão é constante, então numa taça em V o nível sobe rápido no começo e devagar no fim (volume do cone);
-//  - onde ele bate, espirram gotas que sobem, caem e escorrem na parede da taça;
+//  - onde ele bate, a superfície afunda e faz ondas (sem gotinhas voando, para parecer de verdade);
 //  - a superfície do suco tem equação de onda: treme no impacto, quando o gelo boia e quando as gotas caem;
 //  - a groselha entra pela superfície e afunda como uma nuvem até o fundo (é mais densa);
 //  - a rodela de limão cai e encaixa na borda e o canudo com guarda-chuva cai e se apoia no gelo.
@@ -596,7 +596,6 @@ function iniciar() {
       nivel = Math.min(NIVEL_FIM, A + Math.cbrt(vol));
       const noSuco = imp.y <= nivel + 0.001;
       if (noSuco) empurrar(imp.x, imp.z, 0.012 * (nivel < A + 0.08 ? 0.4 : 1));
-      espirrar(imp.x, imp.y, imp.z, imp.v, imp.sv.cor, noSuco ? 2 : 3);
       if (imp.sv.cor === corGroselha) { nuvemForca = Math.min(1, nuvemForca + dt * 3); nuvem = nivel - 0.05; }
     }
     if (t > 4.6) {
